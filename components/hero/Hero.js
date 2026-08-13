@@ -3,18 +3,24 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import GradualBlur from '@/components/effects/GradualBlur';
+import SmartVideo from '@/components/effects/SmartVideo';
 
 export default function Hero() {
   return (
     <section className="relative min-h-[100svh] w-full overflow-hidden flex items-center justify-center">
-      <video
+      {/* Dark backdrop behind the video while its first frame loads —
+          no white flash / stuck-black-box during the initial download. */}
+      <div className="absolute inset-0 bg-[#14180f]" aria-hidden="true" />
+      <SmartVideo
         className="absolute inset-0 w-full h-full object-cover"
         src="/hero-section.mp4"
+        srcMobile="/hero-section-mobile.mp4"
         autoPlay
         muted
         loop
         playsInline
         aria-hidden
+        fetchPriority="high"
       />
       <div className="absolute inset-0 bg-gradient-to-b from-ink/30 via-ink/5 to-ink/40" />
 

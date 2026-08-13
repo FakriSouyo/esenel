@@ -130,17 +130,17 @@ export const posts = [
     ],
   },
   {
-    slug: 'a-tarakan-wedding-board',
-    title: 'A Tarakan wedding board',
+    slug: 'a-sleman-wedding-board',
+    title: 'A Sleman wedding board',
     category: 'gift-guides',
     date: 'March 08, 2026',
     readTime: '6 min read',
     image:
       'https://images.unsplash.com/photo-1509927083803-4bd519298ac4?q=80&w=1400&auto=format&fit=crop',
     excerpt:
-      'How we build a flower board for a Tarakan wedding — from the first sketch to the last stem.',
+      'How we build a flower board for a Sleman wedding — from the first sketch to the last stem.',
     body: [
-      'Weddings in Tarakan are loud, generous, and full of colour — the flower board has to keep up without overwhelming the room. We start with a palette drawn from the couple\u2019s story, not from trend pages.',
+      'Weddings in Sleman are loud, generous, and full of colour — the flower board has to keep up without overwhelming the room. We start with a palette drawn from the couple\u2019s story, not from trend pages.',
       'The board is built flat on the worktable, flowers arranged in loose clusters with dried material for texture. It is designed to photograph well and to last: boards are made to be kept, not thrown away the morning after.',
       'Every board leaves the atelier with a care note and an offer to refresh it after the event. Most couples take us up on it — which is how a wedding board becomes a piece of the home.',
     ],

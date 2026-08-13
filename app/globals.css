@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist+Pixel&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+/* Fonts are loaded via <link> in app/layout.js (parallel + preconnect)
+   rather than a render-blocking @import here. */
 
 @tailwind base;
 @tailwind components;
@@ -70,3 +71,4 @@ body {
     padding-right: 40px;
   }
 }
+

@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ShoppingBag, X, ChevronDown, ArrowLeft, ArrowRight, Menu } from 'lucide-react';
 import { collectionGroups, collectionCopy } from '@/data/collections';
 import { useCart } from '@/components/cart/CartContext';
+import SearchOverlay from '@/components/search/SearchOverlay';
+import { onPreloaderExit } from '@/lib/preloaderBus';
 
 const navLinks = [
   { label: 'SHOP', href: '/shop' },
@@ -31,7 +33,35 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileView, setMobileView] = useState('main');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const dragRef = useRef(null);
+  const [preloading, setPreloading] = useState(true);
   const { count, setIsOpen } = useCart();
+
+  // Hidden while the preloader section holds the screen; fades in as soon
+  // as the page starts hand-scrolling down into the site.
+  useEffect(() => onPreloaderExit(() => setPreloading(false)), []);
+
+  // Pull-down-to-close for the mobile drawer. Manual pointer handling (no
+  // framer drag) so it works reliably on touch; the drawer follows the finger
+  // and closes when pulled past 90px (or flicked down fast).
+  const onHandlePointerDown = (e) => {
+    dragRef.current = { startY: e.clientY, active: true };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onHandlePointerMove = (e) => {
+    if (!dragRef.current?.active) return;
+    setDragY(Math.max(0, e.clientY - dragRef.current.startY));
+  };
+  const onHandlePointerUp = (e) => {
+    const drag = dragRef.current;
+    if (!drag?.active) return;
+    dragRef.current = null;
+    const dy = Math.max(0, e.clientY - drag.startY);
+    setDragY(0);
+    if (dy > 90) setMobileOpen(false);
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 90);
@@ -47,10 +77,30 @@ export default function Navbar() {
     };
   }, [mobileOpen]);
 
+  // open search via ⌘K / Ctrl+K, or "/" (unless already typing in a field)
+  useEffect(() => {
+    const onKey = (e) => {
+      const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      } else if (e.key === '/' && !typing) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <>
       <motion.header
-        className="fixed left-4 right-4 top-5 z-[60] mx-auto max-w-2xl"
+        className={`fixed left-4 right-4 top-5 z-[60] mx-auto max-w-2xl transition-all duration-700 ${
+          preloading
+            ? '-translate-y-6 opacity-0 pointer-events-none'
+            : 'translate-y-0 opacity-100'
+        }`}
         onMouseLeave={() => setMenuOpen(false)}
       >
         <motion.div
@@ -114,7 +164,8 @@ export default function Navbar() {
           <div className="flex items-center gap-1">
             <button
               aria-label="Search"
-              className="p-2.5 rounded-nav hover:bg-ink/[0.05] transition-colors hidden sm:block"
+              onClick={() => setSearchOpen(true)}
+              className="p-2.5 rounded-nav hover:bg-ink/[0.05] transition-colors"
             >
               <Search size={18} strokeWidth={1.75} />
             </button>
@@ -147,6 +198,9 @@ export default function Navbar() {
             </button>
           </div>
         </motion.div>
+
+        {/* Global search overlay */}
+        <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
 
         {/* Collections dropdown */}
         <AnimatePresence>
@@ -220,14 +274,22 @@ export default function Navbar() {
             />
             <motion.div
               initial={{ y: '100%' }}
-              animate={{ y: 0 }}
+              animate={{ y: dragY }}
               exit={{ y: '100%' }}
-              transition={{ duration: 0.4, ease: easeOut }}
+              transition={{ type: 'spring', stiffness: 500, damping: 42 }}
               className="fixed inset-x-0 bottom-0 z-[90] bg-white lg:hidden rounded-t-[1.625rem] shadow-2xl flex max-h-[85dvh] flex-col overflow-hidden"
             >
-              {/* drag handle */}
-              <div className="w-full py-3">
-                <span className="mx-auto block h-1 w-24 rounded-full bg-ink/10" />
+              {/* drag handle — pull down to close */}
+              <div
+                className="w-full cursor-grab touch-none py-3 active:cursor-grabbing"
+                onPointerDown={onHandlePointerDown}
+                onPointerMove={onHandlePointerMove}
+                onPointerUp={onHandlePointerUp}
+                onPointerCancel={onHandlePointerUp}
+                role="button"
+                aria-label="Drag down to close menu"
+              >
+                <span className="mx-auto block h-1.5 w-24 rounded-full bg-ink/15" />
               </div>
 
               {/* Collections header — stays fixed while only the list scrolls */}

@@ -79,8 +79,9 @@ function StoryCard({ card, total, isImage }) {
     <div
       className={`relative flex h-full w-full flex-col overflow-hidden rounded-[28px] ${card.bg} ${card.text} shadow-2xl`}
     >
-      {/* watermark step number */}
-      <span className="pointer-events-none absolute -top-5 right-2 select-none font-display text-[110px] leading-none opacity-10 md:text-[140px]">
+      {/* watermark step number — kept fully inside the card so it never
+          gets clipped by the rounded overflow */}
+      <span className="pointer-events-none absolute right-3 top-1 select-none font-display text-[110px] leading-none opacity-10 md:text-[140px]">
         {card.step}
       </span>
 
@@ -160,7 +161,7 @@ function CardStackItem({ i, total, card, progress }) {
       style={{ zIndex: i }}
     >
       <motion.div
-        style={{ scale }}
+        style={{ scale, willChange: 'transform' }}
         className="relative h-[58vh] w-full max-w-2xl origin-top md:h-[64vh] lg:max-w-3xl"
       >
         <StoryCard card={card} total={total} isImage={!!card.image} />

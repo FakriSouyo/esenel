@@ -54,7 +54,7 @@ export default function AboutPage() {
             <div className="mt-8 flex items-center gap-3 border-t border-sand pt-5">
               <MapPin size={15} className="text-earth" />
               <span className="text-[12px] tracking-[0.12em] text-ink/50 font-medium uppercase">
-                Tarakan, North Kalimantan
+                Sleman, Yogyakarta
               </span>
             </div>
           </div>
@@ -85,17 +85,17 @@ export default function AboutPage() {
         <div className="lg:col-span-5">
           <p className="mb-4 text-[12px] tracking-[0.2em] font-medium text-earth">OUR STORY</p>
           <h2 className="font-display text-3xl leading-[1.12] md:text-5xl">
-            Rooted in Tarakan,
+            Rooted in Sleman,
             <br />
             grown by hand.
           </h2>
         </div>
         <div className="space-y-6 text-[15px] leading-relaxed text-ink/65 lg:col-span-7 lg:pt-2">
           <p>
-            Tarakan is an island of wet mornings and slow afternoons — the kind of place where
-            flowers grow whether you plan for them or not. ESENEL grew out of that rhythm: we buy
-            from the season, arrange the morning of delivery, and let the bouquet stay a little
-            wild.
+            Sleman sits in the cool highlands below Mount Merapi, where volcanic soil and wet
+            mornings make flowers grow whether you plan for them or not. ESENEL grew out of that
+            rhythm: we buy from the season, arrange the morning of delivery, and let the bouquet
+            stay a little wild.
           </p>
           <p>
             We don&rsquo;t chase uniformity. Two bouquets from the same order will never be twins —
@@ -193,14 +193,14 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* ── Tarakan band ── */}
+      {/* ── Sleman band ── */}
       <section className="relative overflow-hidden bg-[#23301F] py-20 text-cloud md:py-28">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_60%_at_80%_10%,rgba(182,197,168,0.2),transparent_70%)]" />
         <div className="container-esenel relative grid gap-14 lg:grid-cols-2 lg:items-center">
           <div>
             <p className="mb-5 flex items-center gap-2 text-[12px] tracking-[0.2em] font-medium text-cloud/60">
               <MapPin size={14} />
-              FROM TARAKAN
+              FROM SLEMAN
             </p>
             <h2 className="font-display text-3xl leading-[1.1] md:text-5xl">
               One atelier.
@@ -208,7 +208,7 @@ export default function AboutPage() {
               Every arrangement, by hand.
             </h2>
             <p className="mt-6 max-w-md leading-relaxed text-cloud/70">
-              From a single worktable in North Kalimantan, we compose, wrap, and deliver every
+              From a single worktable in Sleman, Yogyakarta, we compose, wrap, and deliver every
               order ourselves — cut close to your delivery window, never ahead of time.
             </p>
             <Link

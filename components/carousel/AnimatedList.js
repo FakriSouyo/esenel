@@ -1,23 +1,20 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 
-function AnimatedListItem({ children }) {
-  const animations = {
-    initial: { scale: 0, opacity: 0 },
-    animate: { scale: 1, opacity: 1, originY: 0 },
-    exit: { scale: 0, opacity: 0 },
-    transition: { type: 'spring', stiffness: 350, damping: 40 },
-  };
-
-  return (
-    <motion.div {...animations} layout className="mx-auto w-full">
-      {children}
-    </motion.div>
-  );
-}
-
+/**
+ * AnimatedList — looping vertical list.
+ *
+ * Each tick a new item springs in at the TOP (mount animation, same pop-in
+ * style as the original), the previous items stay in place, and the oldest
+ * item is unmounted by React. Keys are absolute sequence positions, so the
+ * sequence cycles 1 → 2 → 3 → 1 → 2 → 3 … forever instead of resetting to a
+ * single item. No AnimatePresence: the DOM always holds exactly N items, so
+ * the loop can never accumulate or stall.
+ *
+ * `delay` is the interval between items.
+ */
 const AnimatedList = React.memo(function AnimatedList({
   children,
   className,
@@ -26,28 +23,43 @@ const AnimatedList = React.memo(function AnimatedList({
 }) {
   const [index, setIndex] = useState(0);
   const childrenArray = useMemo(() => React.Children.toArray(children), [children]);
+  const n = childrenArray.length;
 
   useEffect(() => {
-    if (childrenArray.length === 0) return undefined;
+    if (n === 0) return undefined;
 
     const timeout = setTimeout(() => {
-      setIndex((prevIndex) => (prevIndex + 1) % childrenArray.length);
+      setIndex((prevIndex) => prevIndex + 1);
     }, delay);
 
     return () => clearTimeout(timeout);
-  }, [index, delay, childrenArray.length]);
+  }, [index, delay, n]);
 
-  const itemsToShow = useMemo(() => {
-    return childrenArray.slice(0, index + 1).reverse();
-  }, [index, childrenArray]);
+  // The visible stack: the last min(n, index + 1) entries of the infinite
+  // sequence childrenArray[index % n], newest at the top. Absolute keys mean
+  // the newest item is a fresh mount (pops in), old keys unmount instantly.
+  const stack = useMemo(() => {
+    const out = [];
+    for (let k = Math.max(0, index - n + 1); k <= index; k += 1) {
+      out.unshift({ item: childrenArray[k % n], key: k });
+    }
+    return out;
+  }, [index, n, childrenArray]);
 
   return (
     <div className={`flex flex-col items-center gap-4 ${className ?? ''}`} {...props}>
-      <AnimatePresence>
-        {itemsToShow.map((item) => (
-          <AnimatedListItem key={item.key}>{item}</AnimatedListItem>
-        ))}
-      </AnimatePresence>
+      {stack.map(({ item, key }) => (
+        <motion.div
+          key={key}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1, originY: 0 }}
+          transition={{ type: 'spring', stiffness: 350, damping: 40 }}
+          layout
+          className="mx-auto w-full"
+        >
+          {item}
+        </motion.div>
+      ))}
     </div>
   );
 });

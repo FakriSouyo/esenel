@@ -87,7 +87,7 @@ export default function ImageCursorTrail({
           alt={`Trail image ${i + 1}`}
           data-index={i}
           data-status="inactive"
-          className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 scale-0 rounded-2xl object-cover opacity-0 shadow-md transition-[transform,opacity] duration-300 data-[status=active]:scale-100 data-[status=active]:opacity-100 data-[status=active]:duration-500 ${imgClass}`}
+          className={`pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 scale-0 object-cover opacity-0 transition-[transform,opacity] duration-300 data-[status=active]:scale-100 data-[status=active]:opacity-100 data-[status=active]:duration-500 ${imgClass}`}
         />
       ))}
       {children}

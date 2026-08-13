@@ -2,6 +2,8 @@ import Hero from '@/components/hero/Hero';
 import BannerSection from '@/components/banner/BannerSection';
 import MorphSlider from '@/components/effects/MorphSlider';
 import MoltenMetal from '@/components/effects/MoltenMetal';
+import SmartVideo from '@/components/effects/SmartVideo';
+import DeferredMount from '@/components/effects/DeferredMount';
 import GradualBlur from '@/components/effects/GradualBlur';
 import ImageCursorTrail from '@/components/effects/ImageCursorTrail';
 import CoverflowCarousel from '@/components/carousel/CoverflowCarousel';
@@ -11,7 +13,7 @@ import FromTheGarden from '@/components/editorial/FromTheGarden';
 import { getFeaturedProducts } from '@/data/products';
 import { collectionCopy } from '@/data/collections';
 import { formatIDR } from '@/lib/format';
-import { Truck } from 'lucide-react';
+import { Truck, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 const faqItems = [
@@ -55,17 +57,12 @@ const deliverySteps = [
   },
 ];
 
-const journalTrailImages = [
-  '/small.jpg',
-  '/medium.jpg',
-  '/large.jpg',
-  '/extra-large.jpg',
-  '/vase.jpg',
-  '/flower-board.jpg',
-  'https://images.unsplash.com/photo-1520763185298-1b434c919102?q=80&w=400&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1487070183336-b863922373d4?q=80&w=400&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1490750967868-88aa4486c946?q=80&w=400&auto=format&fit=crop',
-];
+// All flower cut-outs from public/flowerstrail — the cursor trail cycles
+// through every one of them as the mouse moves across the journal section.
+const journalTrailImages = Array.from(
+  { length: 10 },
+  (_, i) => `/flowerstrail/flower${i + 1}.png`
+);
 
 const collectionSlides = Object.entries(collectionCopy).map(([slug, copy]) => {
   return {
@@ -138,22 +135,26 @@ export default function HomePage() {
               VIEW ALL →
             </Link>
           </div>
+          {/* Deferred: WebGL slider only initializes once scrolled near,
+              so first paint isn't blocked by shader compilation. */}
           <div style={{ height: '520px', position: 'relative' }} className="md:max-h-[520px]">
-            <MorphSlider
-              items={collectionSlides}
-              transition="melt"
-              duration={1.1}
-              intensity={0.55}
-              scale={2.4}
-              drift={0.4}
-              radius={20}
-              overlayColor="#05060a"
-              autoplay
-              autoplayDelay={4}
-              showCaptions
-              showControls
-              showIndicators
-            />
+            <DeferredMount className="h-full w-full">
+              <MorphSlider
+                items={collectionSlides}
+                transition="melt"
+                duration={1.1}
+                intensity={0.55}
+                scale={2.4}
+                drift={0.4}
+                radius={20}
+                overlayColor="#05060a"
+                autoplay
+                autoplayDelay={4}
+                showCaptions
+                showControls
+                showIndicators
+              />
+            </DeferredMount>
           </div>
         </div>
       </section>
@@ -163,9 +164,10 @@ export default function HomePage() {
 
       {/* 05 SIGNATURE EXPERIENCE — Craft */}
       <section className="relative overflow-hidden bg-ink py-28 md:py-40">
-        <video
+        <SmartVideo
           className="absolute inset-0 h-full w-full object-cover"
           src="/banner.mp4"
+          srcMobile="/banner-mobile.mp4"
           autoPlay
           muted
           loop
@@ -214,25 +216,28 @@ export default function HomePage() {
       {/* 06 Delivery */}
       <section className="relative overflow-hidden bg-white py-24 md:py-32">
         <div className="absolute inset-0">
-          <MoltenMetal
-            color1="#23301F"
-            color2="#71876A"
-            color3="#B6C5A8"
-            speed={0.3}
-            scale={3.5}
-            detail={3}
-            glow={1.4}
-            coreSize={0.12}
-            swirl={1}
-            fold={-0.2}
-            blackPoint={0.08}
-            brightness={1.2}
-            colorMode="molten"
-            grain
-            grainIntensity={0.06}
-            opacity={0.9}
-            className="opacity-30"
-          />
+          {/* Deferred: heavy WebGL shader only compiles when scrolled near. */}
+          <DeferredMount className="h-full w-full">
+            <MoltenMetal
+              color1="#23301F"
+              color2="#71876A"
+              color3="#B6C5A8"
+              speed={0.3}
+              scale={3.5}
+              detail={3}
+              glow={1.4}
+              coreSize={0.12}
+              swirl={1}
+              fold={-0.2}
+              blackPoint={0.08}
+              brightness={1.2}
+              colorMode="molten"
+              grain
+              grainIntensity={0.06}
+              opacity={0.9}
+              className="opacity-30"
+            />
+          </DeferredMount>
         </div>
         <div className="container-esenel relative z-10 max-w-2xl mx-auto text-center">
           <p className="text-[12px] tracking-[0.2em] font-medium text-earth mb-4">DELIVERY</p>
@@ -316,14 +321,32 @@ export default function HomePage() {
             Questions, answered.
           </h2>
           <BouncyAccordion items={faqItems} />
-          <div className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-nav bg-sand/40 p-6 md:p-8">
-            <p className="font-display text-lg md:text-xl">Still have a question?</p>
-            <Link
-              href="/faq"
-              className="inline-flex items-center gap-2 bg-ink text-cloud px-6 py-3 rounded-pill text-[13px] font-medium tracking-nav hover:bg-ink/90 transition-colors"
-            >
-              VIEW ALL FAQ
-            </Link>
+          <div className="relative mt-12 overflow-hidden rounded-[24px] bg-[#23301F] px-7 py-9 text-cloud md:px-12 md:py-12">
+            {/* soft green glow + decorative question mark */}
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(55%_75%_at_85%_0%,rgba(182,197,168,0.22),transparent_70%)]" />
+            <span className="pointer-events-none absolute right-5 bottom-1 select-none font-display text-[150px] leading-none text-cloud/5">
+              ?
+            </span>
+            <div className="relative flex flex-col items-start justify-between gap-7 sm:flex-row sm:items-center">
+              <div>
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.2em] text-cloud/60">
+                  Still unsure?
+                </p>
+                <p className="font-display text-2xl leading-tight md:text-3xl">
+                  Still have a question?
+                </p>
+                <p className="mt-2 max-w-sm text-sm leading-relaxed text-cloud/65">
+                  Delivery windows, flower care, custom orders — our atelier answers within a day.
+                </p>
+              </div>
+              <Link
+                href="/faq"
+                className="inline-flex shrink-0 items-center gap-2 rounded-pill bg-cloud px-7 py-3.5 text-[13px] font-medium tracking-nav text-ink transition-colors hover:bg-cloud/90"
+              >
+                VIEW ALL FAQ
+                <ArrowRight size={14} />
+              </Link>
+            </div>
           </div>
         </div>
       </section>
