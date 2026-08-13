@@ -4,6 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useLenis } from "lenis/react";
 import { firePreloaderExit } from "@/lib/preloaderBus";
 
+// True when the app is rendering a 404. The not-found page tags <body> with
+// this class in a layout effect (which runs before any passive effect), so by
+// the time this effect runs the preloader can bail out cleanly.
+const isNotFoundPage = () =>
+  typeof document !== "undefined" &&
+  document.body.classList.contains("route-notfound");
+
 /**
  * ESENEL preloader — a Skiper8-style "word preloader" (Hello in 9 languages,
  * dead center) rendered as the FIRST SECTION of the document.
@@ -50,12 +57,32 @@ export default function Preloader() {
   const [leaving, setLeaving] = useState(false);
   const [removed, setRemoved] = useState(false);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const [notFound, setNotFound] = useState(false);
+  const exitFiredRef = useRef(false);
 
   useEffect(() => {
     lenisRef.current = lenis;
   }, [lenis]);
 
   useEffect(() => {
+    // 404 — no preloader at all. The not-found page tags <body> with
+    // `route-notfound` in a layout effect, so the class is already present
+    // when this passive effect runs. Let anything waiting on the exit signal
+    // (the navbar) proceed so it doesn't stay hidden after leaving the page.
+    if (isNotFoundPage()) {
+      setNotFound(true);
+      if (!exitFiredRef.current) {
+        exitFiredRef.current = true;
+        firePreloaderExit();
+      }
+      return;
+    }
+
+    // NOTE: no once-per-load guard here on purpose. In dev, React StrictMode
+    // mounts, cleans up, and mounts again — the cleanup clears the timers
+    // below, so the second run must re-arm them or the preloader freezes on
+    // the first word forever. The effect is idempotent, so re-running is safe.
+
     setSize({ w: window.innerWidth, h: window.innerHeight });
 
     // Word cycling: "Hello" lingers, then each language swaps in fast.
@@ -76,7 +103,10 @@ export default function Preloader() {
     const lift = setTimeout(() => {
       clearTimeout(cycleTimer);
       setLeaving(true);
-      firePreloaderExit();
+      if (!exitFiredRef.current) {
+        exitFiredRef.current = true;
+        firePreloaderExit();
+      }
 
       // Unlock, then hand-scroll down by one screen — the preloader slides
       // away like scrolling from one section to the next.
@@ -136,9 +166,9 @@ export default function Preloader() {
       document.body.style.overflow = "";
       lenisRef.current?.start();
     };
-  }, []);
+  }, [notFound]);
 
-  if (removed) return null;
+  if (removed || notFound) return null;
 
   // Wavy bottom edge — the section's silhouette as it scrolls away, so the
   // reveal into the hero has the same soft curve as the previous curtain.
@@ -148,7 +178,7 @@ export default function Preloader() {
     <section
       ref={sectionRef}
       aria-hidden="true"
-      className="relative h-[100svh] w-full bg-[#23301F]"
+      className="preloader-root relative h-[100svh] w-full bg-[#23301F]"
     >
       {size.h > 0 && (
         <svg

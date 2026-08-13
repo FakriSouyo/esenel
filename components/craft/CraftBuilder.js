@@ -4,18 +4,17 @@ import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check,
-  Plus,
-  Minus,
   ArrowLeft,
   ArrowRight,
   PenLine,
   Sparkles,
   PackageCheck,
 } from 'lucide-react';
-import { craftSizes, craftFlowers, craftWrappings } from '@/data/flowers';
+import { craftSizes, craftWrappings } from '@/data/flowers';
+import { CRAFT_ASSETS } from '@/lib/craftAssets';
 import { useCart } from '@/components/cart/CartContext';
 import { formatIDR } from '@/lib/format';
-import BouquetPreview from './BouquetPreview';
+import { BouquetWorkbench } from './workbench/BouquetWorkbench';
 
 const STEPS = [
   { id: 1, label: 'Size', title: 'Choose your size.', desc: 'Every bouquet starts with a size — from a quiet gesture to a statement.' },
@@ -53,24 +52,22 @@ export default function CraftBuilder() {
   const wrapping = craftWrappings.find((w) => w.id === wrappingId);
   const totalStems = Object.values(quantities).reduce((a, b) => a + b, 0);
 
+  // Flower picks now come from the interactive workbench (Konva + Matter.js)
+  // — it reports per-asset counts, which drive price, preview and summary.
   const selectedFlowers = useMemo(
     () =>
-      craftFlowers
-        .filter((f) => quantities[f.id] > 0)
-        .map((f) => ({ ...f, qty: quantities[f.id] })),
+      CRAFT_ASSETS.filter((a) => (quantities[a.id] || 0) > 0).map((a) => ({
+        id: a.id,
+        name: a.name,
+        image: a.src,
+        pricePerStem: a.price,
+        qty: quantities[a.id],
+      })),
     [quantities]
   );
 
   const flowersPrice = selectedFlowers.reduce((sum, f) => sum + f.pricePerStem * f.qty, 0);
   const total = size.basePrice + flowersPrice;
-
-  const updateQty = (id, delta) => {
-    setQuantities((prev) => {
-      const current = prev[id] || 0;
-      const next = Math.max(0, current + delta);
-      return { ...prev, [id]: next };
-    });
-  };
 
   const canNext =
     (step === 1 && sizeId) ||
@@ -84,7 +81,7 @@ export default function CraftBuilder() {
       id: `craft-${Date.now()}`,
       name: 'Craft Bouquet',
       price: total,
-      image: selectedFlowers[0]?.image || craftFlowers[0].image,
+      image: selectedFlowers[0]?.image || CRAFT_ASSETS[0]?.src || '/medium.jpg',
       craft: {
         size: size.label,
         flowers: selectedFlowers.map((f) => ({ name: f.name, qty: f.qty })),
@@ -98,20 +95,9 @@ export default function CraftBuilder() {
   const current = STEPS.find((s) => s.id === step);
 
   return (
-    <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:gap-16">
-      {/* ── Left: live preview (sticky on desktop) — the full order
-          summary and ADD TO BAG live in the final review step. ── */}
-      <div className="lg:sticky lg:top-28">
-        <BouquetPreview selectedFlowers={selectedFlowers} wrappingId={wrappingId} />
-        <div className="mt-4 flex items-center justify-between text-sm">
-          <span className="text-ink/45">
-            {totalStems > 0 ? `${totalStems} stems selected` : 'No flowers selected yet'}
-          </span>
-          <span className="font-display text-xl">{formatIDR(total)}</span>
-        </div>
-      </div>
-
-      {/* ── Right: stepper + step content ── */}
+    <div className="mx-auto max-w-3xl">
+      {/* Stepper + step content — the live bouquet lives in the workbench
+          canvas (step 2), so the old static preview is gone. */}
       <div>
         {/* progress header */}
         <div className="mb-12">
@@ -214,73 +200,12 @@ export default function CraftBuilder() {
             )}
 
             {step === 2 && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {craftFlowers.map((f) => {
-                  const qty = quantities[f.id] || 0;
-                  const selected = qty > 0;
-                  return (
-                    <div
-                      key={f.id}
-                      className={`rounded-2xl border p-4 transition-all duration-300 ${
-                        selected
-                          ? 'border-ink bg-white shadow-[0_8px_24px_rgba(32,34,30,0.08)]'
-                          : 'border-sand bg-white/60 hover:border-ink/25'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div className="relative shrink-0">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={f.image}
-                            alt={f.name}
-                            className="size-14 rounded-full border border-white object-cover shadow-sm"
-                          />
-                          {selected && (
-                            <span className="absolute -bottom-0.5 -right-0.5 grid size-5 place-items-center rounded-full bg-earth text-white">
-                              <Check size={11} />
-                            </span>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-display text-base leading-tight">{f.name}</p>
-                          <p className="mt-0.5 text-xs text-ink/45">
-                            {formatIDR(f.pricePerStem)} / stem
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 flex items-center justify-between">
-                        <p className={`text-xs ${selected ? 'text-earth' : 'text-ink/35'}`}>
-                          {selected ? `${qty} ${qty === 1 ? 'stem' : 'stems'} in bouquet` : 'Tap + to add'}
-                        </p>
-                        <div className="flex items-center gap-0.5 rounded-pill border border-sand bg-white p-1">
-                          <button
-                            onClick={() => updateQty(f.id, -1)}
-                            aria-label={`Remove ${f.name}`}
-                            className={`grid size-7 place-items-center rounded-full transition-colors ${
-                              qty > 0
-                                ? 'text-ink hover:bg-sand/50'
-                                : 'cursor-not-allowed text-ink/20'
-                            }`}
-                          >
-                            <Minus size={13} />
-                          </button>
-                          <span className="w-7 text-center text-sm font-medium tabular-nums">
-                            {qty}
-                          </span>
-                          <button
-                            onClick={() => updateQty(f.id, 1)}
-                            aria-label={`Add ${f.name}`}
-                            className="grid size-7 place-items-center rounded-full text-ink transition-colors hover:bg-sand/50"
-                          >
-                            <Plus size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <>
+                <BouquetWorkbench onFlowersChange={setQuantities} />
+                <p className="mt-4 text-center text-xs text-ink/40">
+                  Tap a flower to drop it in — drag, rotate and scale each stem. Press ⌘Z to undo.
+                </p>
+              </>
             )}
 
             {step === 3 && (
@@ -409,8 +334,14 @@ export default function CraftBuilder() {
             )}
         </motion.div>
 
-        {/* nav buttons */}
-        <div className="mt-10 flex items-center justify-between">
+        {/* running summary + nav buttons */}
+        <div className="mt-10 flex items-center justify-between border-t border-sand pt-6">
+          <span className="text-sm text-ink/45">
+            {totalStems > 0 ? `${totalStems} stems selected` : 'No flowers selected yet'}
+          </span>
+          <span className="font-display text-2xl">{formatIDR(total)}</span>
+        </div>
+        <div className="mt-6 flex items-center justify-between">
           <button
             onClick={() => setStep((s) => Math.max(1, s - 1))}
             disabled={step === 1}

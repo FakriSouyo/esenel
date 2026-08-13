@@ -27,11 +27,15 @@ export default function NewsletterForm() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Your email address"
             aria-label="Email address"
-            className="h-[52px] flex-1 rounded-pill border border-white/20 bg-white/10 px-5 text-sm text-cloud placeholder:text-cloud/50 focus:border-cloud/60 focus:outline-none"
+            // NOTE: on mobile the form is a column, so flex-1 would resolve
+            // flex-basis:0% against the vertical main axis and collapse the
+            // input to content height — full width instead, flex-1 only on
+            // the sm+ row layout where the main axis is horizontal.
+            className="h-14 w-full rounded-pill border border-white/25 bg-white/15 px-6 text-[15px] text-cloud placeholder:text-cloud/55 focus:border-cloud/60 focus:outline-none sm:h-[52px] sm:w-auto sm:flex-1 sm:px-5 sm:text-sm"
           />
           <button
             type="submit"
-            className="h-[52px] shrink-0 rounded-pill bg-cloud px-8 text-[13px] font-medium tracking-nav text-ink transition-colors hover:bg-white"
+            className="h-14 w-full shrink-0 rounded-pill bg-cloud px-8 text-[13px] font-medium tracking-nav text-ink transition-colors hover:bg-white sm:h-[52px] sm:w-auto"
           >
             SUBSCRIBE
           </button>

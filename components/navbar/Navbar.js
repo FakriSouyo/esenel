@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLenis } from 'lenis/react';
 import { Search, ShoppingBag, X, ChevronDown, ArrowLeft, ArrowRight, Menu } from 'lucide-react';
 import { collectionGroups, collectionCopy } from '@/data/collections';
 import { useCart } from '@/components/cart/CartContext';
@@ -37,11 +38,34 @@ export default function Navbar() {
   const [dragY, setDragY] = useState(0);
   const dragRef = useRef(null);
   const [preloading, setPreloading] = useState(true);
+  const [is404, setIs404] = useState(false);
   const { count, setIsOpen } = useCart();
+  const lenis = useLenis();
 
   // Hidden while the preloader section holds the screen; fades in as soon
   // as the page starts hand-scrolling down into the site.
   useEffect(() => onPreloaderExit(() => setPreloading(false)), []);
+
+  // 404 — the not-found page tags <body> with `route-notfound`. The navbar
+  // stays hidden there (its inline <style> also hides it before hydration).
+  useEffect(() => {
+    const check = () =>
+      setIs404(document.body.classList.contains('route-notfound'));
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => mo.disconnect();
+  }, []);
+
+  // ESENEL logo — from the home page, glide back to the top (like any
+  // logo does); on other pages it navigates home as usual.
+  const onLogoClick = (e) => {
+    if (window.location.pathname === '/') {
+      e.preventDefault();
+      if (lenis) lenis.scrollTo(0, { duration: 1.1 });
+      else window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   // Pull-down-to-close for the mobile drawer. Manual pointer handling (no
   // framer drag) so it works reliably on touch; the drawer follows the finger
@@ -77,9 +101,11 @@ export default function Navbar() {
     };
   }, [mobileOpen]);
 
-  // open search via ⌘K / Ctrl+K, or "/" (unless already typing in a field)
+  // open search via ⌘K / Ctrl+K, or "/" (unless already typing in a field).
+  // Never on the 404 page — search is hidden there.
   useEffect(() => {
     const onKey = (e) => {
+      if (document.body.classList.contains('route-notfound')) return;
       const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -96,8 +122,8 @@ export default function Navbar() {
   return (
     <>
       <motion.header
-        className={`fixed left-4 right-4 top-5 z-[60] mx-auto max-w-2xl transition-all duration-700 ${
-          preloading
+        className={`navbar-root fixed left-4 right-4 top-5 z-[60] mx-auto max-w-2xl transition-all duration-700 ${
+          preloading || is404
             ? '-translate-y-6 opacity-0 pointer-events-none'
             : 'translate-y-0 opacity-100'
         }`}
@@ -116,7 +142,7 @@ export default function Navbar() {
           }`}
         >
           {/* Left: logo */}
-          <Link href="/" className="shrink-0 group">
+          <Link href="/" onClick={onLogoClick} className="shrink-0 group">
             <motion.span
               animate={{ opacity: scrolled ? 0.85 : 1 }}
               transition={{ duration: 0.4, ease: easeOut }}

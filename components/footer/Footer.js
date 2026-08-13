@@ -55,7 +55,7 @@ function LinkGroup({ heading, links, className = '' }) {
 
 export default function Footer() {
   return (
-    <footer className="relative overflow-hidden bg-white text-ink">
+    <footer className="footer-root relative overflow-hidden bg-white text-ink">
       {/* Main columns */}
       <div className="relative z-10 mx-auto w-full max-w-[1240px] px-6 sm:px-10">
         <div className="grid grid-cols-1 gap-y-12 pb-16 pt-20 md:grid-cols-2 md:gap-y-16 md:pt-28 md:pb-20 lg:grid-cols-12 lg:gap-x-12">

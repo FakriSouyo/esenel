@@ -50,7 +50,7 @@ components/
   hero/            Immersive full-bleed hero
   products/        ProductCard, ProductGrid (filter pills), AddToBagButton
   collections/
-  craft/           CraftBuilder (5-step flow), BouquetPreview (artistic scatter)
+  craft/           CraftBuilder (5-step flow) + BouquetWorkbench (Konva + Matter.js canvas)
   cart/            CartContext (localStorage-persisted), CartDrawer
   editorial/       Reusable asymmetric storytelling section
   faq/             Accordion

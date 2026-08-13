@@ -98,15 +98,25 @@ export default function SmartVideo({
       }
     };
 
+    // While the search overlay is open the page behind it is blurred —
+    // decoding a video under a backdrop-blur is expensive and makes the
+    // video stutter. Pause until the overlay closes.
+    const onSearch = (e) => {
+      if (e.detail?.open) video.pause();
+      else update();
+    };
+
     update();
     const io = new IntersectionObserver(update, { threshold: 0 });
     io.observe(video);
     document.addEventListener('visibilitychange', update);
     window.addEventListener('resize', update);
+    window.addEventListener('esenel:search', onSearch);
     return () => {
       io.disconnect();
       document.removeEventListener('visibilitychange', update);
       window.removeEventListener('resize', update);
+      window.removeEventListener('esenel:search', onSearch);
     };
   }, [ready]);
 

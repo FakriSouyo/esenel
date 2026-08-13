@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Sprout, Hand, Flower2, MapPin } from 'lucide-react';
+import RollingWords from '@/components/about/RollingWords';
+import BentoShowcase from '@/components/about/BentoShowcase';
 
 export const metadata = { title: 'About — ESENEL' };
 
@@ -111,6 +113,9 @@ export default function AboutPage() {
         </div>
       </section>
 
+      {/* ── 3D rolling words — Skiper88-style interlude ── */}
+      <RollingWords />
+
       {/* ── Values ── */}
       <section className="bg-cloud py-20 md:py-28">
         <div className="container-esenel">
@@ -148,50 +153,8 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* ── Gallery bento ── */}
-      <section className="container-esenel py-20 md:py-28">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-          {/* statement tile */}
-          <div className="relative col-span-2 row-span-2 overflow-hidden rounded-[24px] bg-ink p-8 text-cloud md:p-10">
-            <div className="absolute inset-0 bg-[radial-gradient(70%_60%_at_20%_0%,rgba(182,197,168,0.25),transparent_70%)]" />
-            <span className="relative font-display text-6xl leading-none text-cloud/20">“</span>
-            <p className="relative mt-6 max-w-xs font-display text-2xl leading-[1.2] md:text-3xl">
-              We stop while the composition still breathes.
-            </p>
-            <p className="relative mt-4 max-w-xs text-sm leading-relaxed text-cloud/70">
-              No two bouquets are ever quite the same — and that&rsquo;s exactly how it should be.
-            </p>
-          </div>
-
-          <div className="relative aspect-[4/3] overflow-hidden rounded-[24px]">
-            <Image
-              src="https://images.unsplash.com/photo-1490750967868-88aa4486c946?q=80&w=900&auto=format&fit=crop"
-              alt="A warm seasonal arrangement"
-              fill
-              sizes="(min-width: 768px) 25vw, 50vw"
-              className="object-cover transition-transform duration-700 hover:scale-[1.04]"
-            />
-          </div>
-          <div className="relative aspect-[4/3] overflow-hidden rounded-[24px]">
-            <Image
-              src="/vase.jpg"
-              alt="Ceramic vase arrangement"
-              fill
-              sizes="(min-width: 768px) 25vw, 50vw"
-              className="object-cover transition-transform duration-700 hover:scale-[1.04]"
-            />
-          </div>
-          <div className="relative col-span-2 aspect-[16/9] overflow-hidden rounded-[24px] md:aspect-auto">
-            <Image
-              src="https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?q=80&w=1400&auto=format&fit=crop"
-              alt="Wildflowers in a meadow"
-              fill
-              sizes="(min-width: 768px) 50vw, 100vw"
-              className="object-cover transition-transform duration-700 hover:scale-[1.04]"
-            />
-          </div>
-        </div>
-      </section>
+      {/* ── Cinematic bento — Siena-parallax style ── */}
+      <BentoShowcase />
 
       {/* ── Sleman band ── */}
       <section className="relative overflow-hidden bg-[#23301F] py-20 text-cloud md:py-28">

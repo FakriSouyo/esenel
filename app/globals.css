@@ -39,6 +39,16 @@ body {
   color: #20221E;
 }
 
+/* 404 — the not-found page tags <body> with `route-notfound`; hide the
+   global chrome (word preloader + navbar + footer) for as long as that
+   class is set. The not-found page also ships its own inline <style> so the
+   very first paint (before hydration) never shows them either. */
+body.route-notfound .preloader-root,
+body.route-notfound .navbar-root,
+body.route-notfound .footer-root {
+  display: none !important;
+}
+
 ::selection {
   background-color: #B6C5A8;
   color: #20221E;

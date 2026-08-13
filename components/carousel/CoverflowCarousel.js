@@ -186,7 +186,7 @@ export default function CoverflowCarousel({
 
   return (
     <div
-      className={cn('w-full', className)}
+      className={cn('w-full isolate', className)}
       style={{ ['--cf-card']: cardWidth }}
       role="region"
       aria-roledescription="carousel"

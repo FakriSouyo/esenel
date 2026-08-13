@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useLenis } from 'lenis/react';
 import { Search, CornerDownLeft, LayoutGrid, FileText } from 'lucide-react';
@@ -30,8 +31,11 @@ export default function SearchOverlay({ open, onClose }) {
 
   // While open, lock the page: no native scroll, and Lenis is stopped so
   // the mouse wheel only ever scrolls the results panel, never the page.
+  // Also tells the page's videos to pause (blurring a playing video is
+  // expensive — this is what made playback stutter while searching).
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
+    window.dispatchEvent(new CustomEvent('esenel:search', { detail: { open } }));
     if (open) {
       lenis?.stop();
     } else {
@@ -40,6 +44,8 @@ export default function SearchOverlay({ open, onClose }) {
     return () => {
       document.body.style.overflow = '';
       lenis?.start();
+      // clean exit — resume anything we paused
+      window.dispatchEvent(new CustomEvent('esenel:search', { detail: { open: false } }));
     };
   }, [open, lenis]);
 
@@ -171,11 +177,17 @@ export default function SearchOverlay({ open, onClose }) {
   // the mouse over search never scrolls the page behind it.
   const swallowWheel = (e) => e.stopPropagation();
 
-  return (
+  // Portal to <body>: the navbar header has a transform, which would turn it
+  // into the containing block for `position: fixed` and shrink the overlay
+  // to the navbar pill. Out in <body> the backdrop truly covers the viewport
+  // (the whole page blurs), outside clicks hit the backdrop and close, and
+  // nothing blocks the navbar buttons.
+  return createPortal(
     <div className="fixed inset-0 z-[120]" onWheel={swallowWheel}>
-      {/* backdrop */}
+      {/* backdrop — heavy blur so ALL content behind (navbar included) melts
+          away while searching, not just the navbar's own glass */}
       <div
-        className="absolute inset-0 bg-ink/45 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/50 backdrop-blur-xl"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -218,7 +230,15 @@ export default function SearchOverlay({ open, onClose }) {
                       {group.group}
                     </p>
                     {group.items.map((item) => {
-                      const idx = flat.findIndex((f) => f === item);
+                      // flat items are spread copies ({...item, group}), so
+                      // identity comparison always fails — match by content
+                      // instead, or every item resolves to the same index.
+                      const idx = flat.findIndex(
+                        (f) =>
+                          f.type === item.type &&
+                          (f.slug || f.href || f.label) ===
+                            (item.slug || item.href || item.label)
+                      );
                       const active = idx === activeIndex;
                       return (
                         <button
@@ -334,6 +354,7 @@ export default function SearchOverlay({ open, onClose }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
