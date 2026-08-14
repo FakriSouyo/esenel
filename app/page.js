@@ -129,7 +129,7 @@ export default function HomePage() {
               </h2>
             </div>
             <Link
-              href="/collections"
+              href="/shop"
               className="hidden sm:block text-[13px] font-medium tracking-nav border-b border-ink/30 pb-1 hover:border-earth transition-colors"
             >
               VIEW ALL →

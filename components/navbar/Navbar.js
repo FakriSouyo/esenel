@@ -5,14 +5,13 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLenis } from 'lenis/react';
 import { Search, ShoppingBag, X, ChevronDown, ArrowLeft, ArrowRight, Menu } from 'lucide-react';
-import { collectionGroups, collectionCopy } from '@/data/collections';
+import { collectionGroups, collectionCopy, collectionImages } from '@/data/collections';
 import { useCart } from '@/components/cart/CartContext';
 import SearchOverlay from '@/components/search/SearchOverlay';
 import { onPreloaderExit } from '@/lib/preloaderBus';
 
 const navLinks = [
-  { label: 'SHOP', href: '/shop' },
-  { label: 'COLLECTIONS', href: '/collections', dropdown: true },
+  { label: 'COLLECTION', href: '/shop', dropdown: true },
   { label: 'CRAFT', href: '/craft' },
   { label: 'ABOUT', href: '/about' },
   { label: 'JOURNAL', href: '/journal' },
@@ -22,11 +21,10 @@ const easeOut = [0.16, 1, 0.3, 1];
 
 const mobileItems = [
   { label: 'HOME', href: '/', number: 1 },
-  { label: 'SHOP', href: '/shop', number: 2 },
-  { label: 'COLLECTIONS', view: 'collections', number: 3 },
-  { label: 'CRAFT', href: '/craft', number: 4 },
-  { label: 'ABOUT', href: '/about', number: 5 },
-  { label: 'JOURNAL', href: '/journal', number: 6 },
+  { label: 'COLLECTION', view: 'collections', number: 2 },
+  { label: 'CRAFT', href: '/craft', number: 3 },
+  { label: 'ABOUT', href: '/about', number: 4 },
+  { label: 'JOURNAL', href: '/journal', number: 5 },
 ];
 
 export default function Navbar() {
@@ -37,6 +35,22 @@ export default function Navbar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [dragY, setDragY] = useState(0);
   const dragRef = useRef(null);
+  const closeTimer = useRef(null);
+
+  // Hover-only dropdown: opens when the pointer is over COLLECTION (or the
+  // panel itself), closes 120ms after it leaves — the short grace period lets
+  // the pointer cross the 8px gap to the panel without flickering, but closes
+  // as soon as you hover another link or step off the navbar.
+  const openMenu = () => {
+    clearTimeout(closeTimer.current);
+    setMenuOpen(true);
+  };
+  const closeMenu = () => {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setMenuOpen(false), 120);
+  };
+
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
   const [preloading, setPreloading] = useState(true);
   const [is404, setIs404] = useState(false);
   const { count, setIsOpen } = useCart();
@@ -49,8 +63,7 @@ export default function Navbar() {
   // 404 — the not-found page tags <body> with `route-notfound`. The navbar
   // stays hidden there (its inline <style> also hides it before hydration).
   useEffect(() => {
-    const check = () =>
-      setIs404(document.body.classList.contains('route-notfound'));
+    const check = () => setIs404(document.body.classList.contains('route-notfound'));
     check();
     const mo = new MutationObserver(check);
     mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
@@ -127,7 +140,7 @@ export default function Navbar() {
             ? '-translate-y-6 opacity-0 pointer-events-none'
             : 'translate-y-0 opacity-100'
         }`}
-        onMouseLeave={() => setMenuOpen(false)}
+        onMouseLeave={closeMenu}
       >
         <motion.div
           animate={{
@@ -154,20 +167,15 @@ export default function Navbar() {
 
           {/* Center: nav links with micro-interactions */}
           <nav className="hidden lg:flex items-center gap-0.5">
-            {navLinks.map((link, i) => (
+            {navLinks.map((link) => (
               <div
                 key={link.label}
                 className="relative"
-                onMouseEnter={() => link.dropdown && setMenuOpen(true)}
+                onMouseEnter={link.dropdown ? openMenu : closeMenu}
+                onMouseLeave={closeMenu}
               >
                 <Link
                   href={link.href}
-                  onClick={(e) => {
-                    if (link.dropdown) {
-                      e.preventDefault();
-                      setMenuOpen((o) => !o);
-                    }
-                  }}
                   className="group relative flex items-center gap-1 px-[10px] py-2 rounded-nav"
                 >
                   <span className="text-[15px] font-medium tracking-nav text-ink transition-colors duration-300 group-hover:text-earth">
@@ -228,7 +236,7 @@ export default function Navbar() {
         {/* Global search overlay */}
         <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
 
-        {/* Collections dropdown */}
+        {/* COLLECTION dropdown — opens on hover, lists the real catalog groups */}
         <AnimatePresence>
           {menuOpen && (
             <motion.div
@@ -236,7 +244,8 @@ export default function Navbar() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.98 }}
               transition={{ duration: 0.28, ease: easeOut }}
-              onMouseEnter={() => setMenuOpen(true)}
+              onMouseEnter={openMenu}
+              onMouseLeave={closeMenu}
               className="mt-2 rounded-navbar bg-white/60 backdrop-blur-xl border border-white/40 shadow-[0_6px_24px_rgba(0,0,0,0.12)] overflow-hidden hidden lg:block origin-top w-[680px]"
             >
               <div className="grid grid-cols-[1fr_1fr_1.2fr] gap-10 p-10">
@@ -246,7 +255,7 @@ export default function Navbar() {
                       {String(gi + 1).padStart(2, '0')} — {group.heading.toUpperCase()}
                     </p>
                     <ul className="space-y-1.5">
-                      {group.items.map((item, ii) => (
+                      {group.items.map((item) => (
                         <li key={item.slug}>
                           <Link
                             href={`/collections/${item.slug}`}
@@ -267,17 +276,17 @@ export default function Navbar() {
                   </div>
                 ))}
                 <Link
-                  href="/collections"
+                  href="/shop"
                   onClick={() => setMenuOpen(false)}
                   className="group relative rounded-nav overflow-hidden h-full min-h-[180px] block"
                 >
                   <div
                     className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                    style={{ backgroundImage: `url(https://images.unsplash.com/photo-1490750967868-88aa4486c946?q=80&w=1200&auto=format&fit=crop)` }}
+                    style={{ backgroundImage: `url(${collectionImages['extra-large']})` }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-ink/50 to-transparent" />
                   <span className="absolute bottom-4 left-4 text-cloud text-[13px] font-medium tracking-nav">
-                    Explore collection →
+                    Explore the shop →
                   </span>
                 </Link>
               </div>
@@ -427,7 +436,7 @@ export default function Navbar() {
                               <div className="aspect-square rounded-xl overflow-hidden bg-white">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
-                                  src={`/${item.slug}.jpg`}
+                                  src={collectionImages[item.slug]}
                                   alt={item.label}
                                   className="h-full w-full object-cover"
                                 />
@@ -447,7 +456,7 @@ export default function Navbar() {
                     ))}
 
                     <Link
-                      href="/collections"
+                      href="/shop"
                       onClick={() => setMobileOpen(false)}
                       className="mx-1 mt-1 flex items-center justify-center gap-2 rounded-full bg-ink text-cloud px-4 py-3 text-[13px] font-medium tracking-nav"
                     >

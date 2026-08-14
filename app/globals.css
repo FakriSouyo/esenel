@@ -15,6 +15,10 @@ html {
   /* framer-motion useScroll measures the documentElement as the scroll
      container; a non-static position silences its dev warning. */
   position: relative;
+  /* Default UI scale — equivalent to the browser zoom-out to 80% that the
+     client prefers. Same mechanism Chrome uses for page zoom, so fixed
+     elements, viewport units and breakpoints all keep behaving normally. */
+  zoom: 0.8;
 }
 
 html.lenis,

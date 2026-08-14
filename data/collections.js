@@ -21,7 +21,22 @@ export const collectionGroups = [
       { slug: 'flower-board', label: 'Flower Board' },
     ],
   },
+  {
+    heading: 'Made to Order',
+    items: [{ slug: 'custom', label: 'Custom Bouquet' }],
+  },
 ];
+
+// Hero photo for each collection — real catalog shots from public/katalog_esenel.
+export const collectionImages = {
+  small: '/katalog_esenel/Small Bouquet/alba.png',
+  medium: '/katalog_esenel/Medium Bouquet/bali.png',
+  large: '/katalog_esenel/Large Bouquet/amsterdam.png',
+  'extra-large': '/katalog_esenel/Extra Large Bouquet/venice.png',
+  vase: '/katalog_esenel/Vase/bellagio.png',
+  'flower-board': '/katalog_esenel/Papan Bunga/satu.png',
+  custom: '/katalog_esenel/Custom Bouquet/customgift.png',
+};
 
 export const featuredLinks = [
   { slug: 'new', label: 'New Arrivals' },
@@ -35,4 +50,5 @@ export const collectionCopy = {
   'extra-large': { title: 'Extra Large', tagline: 'Make a statement.' },
   vase: { title: 'Vase', tagline: 'Arranged, presented, ready.' },
   'flower-board': { title: 'Flower Board', tagline: 'A gift that lasts.' },
+  custom: { title: 'Custom Bouquet', tagline: 'Made to order, made for you.' },
 };

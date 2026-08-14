@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { collectionImages } from '@/data/collections';
 
 /**
  * CollectionGallery — hover-expand gallery.
@@ -76,7 +77,7 @@ export default function CollectionGallery({ collections }) {
               >
                 <div className="absolute inset-3 top-14 md:inset-4 md:left-[4.6vw]">
                   <Image
-                    src={`/${c.slug}.jpg`}
+                    src={collectionImages[c.slug]}
                     alt={c.copy.title}
                     fill
                     sizes="(min-width: 768px) 40vw, 100vw"
