@@ -33,18 +33,35 @@ export function useBouquetState() {
   // ── add (from physics settle) — does NOT auto-select so the toolbar
   // doesn't flash open after every drop. ──
   const addItem = useCallback(
-    (assetId, transform) => {
-      const asset = getCraftAsset(assetId);
-      const scale = transform.scale ?? asset?.scale ?? 1;
+    (assetId, poseOrTransform, transform) => {
+      // Support both signatures:
+      // 1. addItem(assetId, transform) - legacy
+      // 2. addItem(assetId, pose, transform) - new multi-pose support
+      let pose = 'front';
+      let actualTransform = transform;
+      
+      if (typeof poseOrTransform === 'string') {
+        // New signature: addItem(assetId, pose, transform)
+        pose = poseOrTransform;
+        actualTransform = transform;
+      } else {
+        // Legacy signature: addItem(assetId, transform)
+        actualTransform = poseOrTransform;
+      }
+      
+      const asset = getCraftAsset(assetId, pose);
+      const scale = actualTransform.scale ?? asset?.scale ?? 1;
       const item = {
         id: nextId(),
         assetId,
-        x: transform.x,
-        y: transform.y,
-        rotation: transform.rotation ?? 0,
+        pose,
+        x: actualTransform.x,
+        y: actualTransform.y,
+        rotation: actualTransform.rotation ?? 0,
         scale,
         flip: false,
-        zIndex: Math.round(transform.y * 10),
+        locked: false,
+        zIndex: Math.round(actualTransform.y * 10),
       };
       commit((prev) => [...prev, item]);
       return item.id;
@@ -54,17 +71,21 @@ export function useBouquetState() {
 
   // Live update while dragging / transforming — NO undo step.
   const updateItem = useCallback((id, patch) => {
-    setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, ...patch, zIndex: Math.round((patch.y ?? it.y) * 10) } : it))
-    );
+    setItems((prev) => {
+      const item = prev.find((it) => it.id === id);
+      if (item?.locked) return prev; // Don't update locked items
+      return prev.map((it) => (it.id === id ? { ...it, ...patch, zIndex: Math.round((patch.y ?? it.y) * 10) } : it));
+    });
   }, []);
 
   // End of a drag / transform — one undo step.
   const commitItem = useCallback(
     (id, patch) => {
-      commit((prev) =>
-        prev.map((it) => (it.id === id ? { ...it, ...patch, zIndex: Math.round((patch.y ?? it.y) * 10) } : it))
-      );
+      commit((prev) => {
+        const item = prev.find((it) => it.id === id);
+        if (item?.locked) return prev; // Don't commit locked items
+        return prev.map((it) => (it.id === id ? { ...it, ...patch, zIndex: Math.round((patch.y ?? it.y) * 10) } : it));
+      });
     },
     [commit]
   );
@@ -154,7 +175,7 @@ export function useBouquetState() {
     if (items.length === 0) return;
     commit((prev) =>
       prev.map((it) => {
-        const asset = getCraftAsset(it.assetId);
+        const asset = getCraftAsset(it.assetId, it.pose);
         const r = 90 + Math.random() * 40;
         const a = Math.random() * Math.PI * 2;
         const d = Math.random() * 0.55;
@@ -165,7 +186,23 @@ export function useBouquetState() {
     );
   }, [items.length, commit]);
 
-  const selectItem = useCallback((id) => setSelectedId(id), []);
+  const toggleLock = useCallback(
+    (id) => {
+      commit((prev) => prev.map((it) => (it.id === id ? { ...it, locked: !it.locked } : it)));
+    },
+    [commit]
+  );
+
+  const selectItem = useCallback(
+    (id) => {
+      const item = items.find((it) => it.id === id);
+      if (item?.locked) {
+        return; // Don't select locked items
+      }
+      setSelectedId(id);
+    },
+    [items]
+  );
 
   return {
     items,
@@ -185,5 +222,6 @@ export function useBouquetState() {
     redo,
     shuffle,
     selectItem,
+    toggleLock,
   };
 }

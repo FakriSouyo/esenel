@@ -1,0 +1,127 @@
+<svg width="200" height="150" viewBox="0 0 200 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Define gradients for paper texture and depth -->
+  <defs>
+    <!-- Main paper gradient - beige/cream color with subtle texture -->
+    <linearGradient id="paperGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f5f0e8;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#fffbf5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f5f0e8;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Shadow gradient for depth -->
+    <linearGradient id="shadowGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#d4c5b0;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#d4c5b0;stop-opacity:0" />
+    </linearGradient>
+    
+    <!-- Inner shadow for cone depth -->
+    <radialGradient id="innerShadow" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0" />
+      <stop offset="70%" style="stop-color:#e8dcc8;stop-opacity:0.2" />
+      <stop offset="100%" style="stop-color:#d4c5b0;stop-opacity:0.5" />
+    </radialGradient>
+    
+    <!-- Paper fold highlight -->
+    <linearGradient id="foldHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0" />
+      <stop offset="50%" style="stop-color:#ffffff;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Drop shadow filter -->
+  <filter id="dropShadow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+    <feOffset dx="0" dy="2" result="offsetblur"/>
+    <feComponentTransfer>
+      <feFuncA type="linear" slope="0.3"/>
+    </feComponentTransfer>
+    <feMerge>
+      <feMergeNode/>
+      <feMergeNode in="SourceGraphic"/>
+    </feMerge>
+  </filter>
+  
+  <!-- Main cone shape - trapezoid (wider at bottom, narrower at top) -->
+  <g filter="url(#dropShadow)">
+    <!-- Back side of cone (darker) -->
+    <path d="M 60 10 L 40 145 L 100 150 L 80 10 Z" 
+          fill="#e8dcc8" 
+          opacity="0.6"/>
+    
+    <!-- Main front cone surface -->
+    <path d="M 60 10 L 40 145 L 160 145 L 140 10 Z" 
+          fill="url(#paperGradient)" 
+          stroke="#d4c5b0" 
+          stroke-width="1.5"
+          stroke-linejoin="round"/>
+    
+    <!-- Inner shadow overlay for depth -->
+    <path d="M 60 10 L 40 145 L 160 145 L 140 10 Z" 
+          fill="url(#innerShadow)" 
+          opacity="0.5"/>
+    
+    <!-- Left edge fold highlight -->
+    <path d="M 60 10 L 40 145 L 45 145 L 65 10 Z" 
+          fill="url(#foldHighlight)" 
+          opacity="0.6"/>
+    
+    <!-- Right edge fold (darker for depth) -->
+    <path d="M 135 10 L 155 145 L 160 145 L 140 10 Z" 
+          fill="#e8dcc8" 
+          opacity="0.4"/>
+    
+    <!-- Front side of cone (lighter for dimensional effect) -->
+    <path d="M 120 10 L 100 145 L 160 145 L 140 10 Z" 
+          fill="#fffbf5" 
+          opacity="0.3"/>
+    
+    <!-- Center crease line for paper fold detail -->
+    <line x1="100" y1="10" x2="100" y2="145" 
+          stroke="#e8dcc8" 
+          stroke-width="0.5" 
+          opacity="0.3"/>
+    
+    <!-- Subtle diagonal crease lines for paper texture -->
+    <line x1="70" y1="10" x2="50" y2="145" 
+          stroke="#e8dcc8" 
+          stroke-width="0.3" 
+          opacity="0.2"/>
+    <line x1="130" y1="10" x2="150" y2="145" 
+          stroke="#e8dcc8" 
+          stroke-width="0.3" 
+          opacity="0.2"/>
+    
+    <!-- Top opening rim with slight thickness -->
+    <ellipse cx="100" cy="10" rx="40" ry="6" 
+             fill="#fffbf5" 
+             stroke="#d4c5b0" 
+             stroke-width="1"/>
+    
+    <!-- Inner rim shadow -->
+    <ellipse cx="100" cy="10" rx="38" ry="4" 
+             fill="#e8dcc8" 
+             opacity="0.4"/>
+    
+    <!-- Bottom edge detail -->
+    <path d="M 40 145 Q 100 148 160 145" 
+          stroke="#d4c5b0" 
+          stroke-width="1.5" 
+          fill="none"
+          stroke-linecap="round"/>
+  </g>
+  
+  <!-- Optional decorative twine/ribbon at bottom (subtle) -->
+  <g opacity="0.6">
+    <path d="M 50 140 Q 100 138 150 140" 
+          stroke="#b8a895" 
+          stroke-width="2" 
+          fill="none"
+          stroke-linecap="round"/>
+    <path d="M 50 143 Q 100 141 150 143" 
+          stroke="#b8a895" 
+          stroke-width="1.5" 
+          fill="none"
+          stroke-linecap="round"/>
+  </g>
+</svg>

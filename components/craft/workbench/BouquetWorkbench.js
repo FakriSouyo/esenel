@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Undo2, Redo2, Trash2, Copy, FlipHorizontal2, ChevronUp, ChevronDown, Sparkles } from 'lucide-react';
+import { Undo2, Redo2, Trash2, Copy, FlipHorizontal2, ChevronUp, ChevronDown, Sparkles, Lock, Unlock } from 'lucide-react';
 import { useBouquetState } from '@/hooks/useBouquetState';
 import { getCraftAsset } from '@/lib/craftAssets';
 import { formatIDR } from '@/lib/format';
@@ -38,7 +38,7 @@ export function BouquetWorkbench({ onFlowersChange }) {
   }, [counts, onFlowersChange]);
 
   const totalPrice = useMemo(
-    () => bouquet.items.reduce((sum, it) => sum + (getCraftAsset(it.assetId)?.price || 0), 0),
+    () => bouquet.items.reduce((sum, it) => sum + (getCraftAsset(it.assetId, it.pose)?.price || 0), 0),
     [bouquet.items]
   );
 
@@ -48,7 +48,7 @@ export function BouquetWorkbench({ onFlowersChange }) {
         id: it.id,
         x: it.x,
         y: it.y,
-        radius: (getCraftAsset(it.assetId)?.radius || 26) * it.scale,
+        radius: (getCraftAsset(it.assetId, it.pose)?.radius || 26) * it.scale,
       })),
     [bouquet.items]
   );
@@ -77,11 +77,11 @@ export function BouquetWorkbench({ onFlowersChange }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [bouquet]);
 
-  const handleAssetSelect = (assetId) => {
+  const handleAssetSelect = (assetId, pose = 'front') => {
     setTouched(true);
     setDropQueue((q) => [
       ...q,
-      { reqId: `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, assetId },
+      { reqId: `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, assetId, pose },
     ]);
   };
 
@@ -89,11 +89,19 @@ export function BouquetWorkbench({ onFlowersChange }) {
     setDropQueue((q) => q.filter((r) => r.reqId !== reqId));
   };
 
-  const handleFlowerSettled = (_reqId, assetId, transform) => {
-    bouquet.addItem(assetId, transform);
+  const handleFlowerSettled = (reqId, assetId, transform) => {
+    const dropItem = dropQueue.find((item) => item.reqId === reqId);
+    const pose = dropItem?.pose || 'front';
+    bouquet.addItem(assetId, pose, transform);
   };
 
   const selected = bouquet.items.find((i) => i.id === bouquet.selectedId) ?? null;
+
+  const handleLockedFlowerClick = (id) => {
+    if (window.confirm('This flower is locked. Unlock it?')) {
+      bouquet.toggleLock(id);
+    }
+  };
 
   return (
     <div className="overflow-hidden rounded-[24px] border border-sand bg-white shadow-[0_12px_40px_rgba(32,34,30,0.06)]">
@@ -138,6 +146,10 @@ export function BouquetWorkbench({ onFlowersChange }) {
             <FlipHorizontal2 size={14} />
           </ActionBtn>
           <span className="mx-1 h-5 w-px bg-sand" />
+          <ActionBtn onClick={() => selected && bouquet.toggleLock(selected.id)} label={selected?.locked ? 'Unlock' : 'Lock'}>
+            {selected?.locked ? <Unlock size={14} /> : <Lock size={14} />}
+          </ActionBtn>
+          <span className="mx-1 h-5 w-px bg-sand" />
           <ActionBtn onClick={() => selected && bouquet.bringForward(selected.id)} label="Forward">
             <ChevronUp size={14} />
           </ActionBtn>
@@ -163,13 +175,14 @@ export function BouquetWorkbench({ onFlowersChange }) {
           onCommit={bouquet.commitItem}
           onDropConsumed={handleDropConsumed}
           onFlowerSettled={handleFlowerSettled}
+          onLockedFlowerClick={handleLockedFlowerClick}
         />
 
         {/* empty-state hint */}
         {!touched && bouquet.items.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="rounded-pill bg-white/90 px-5 py-3 text-sm text-ink/60 shadow-[0_8px_24px_rgba(32,34,30,0.12)] backdrop-blur-sm">
-              Tap a flower below to drop it into the vase ✿
+              Tap a flower below to drop it into the bouquet ✿
             </div>
           </div>
         )}

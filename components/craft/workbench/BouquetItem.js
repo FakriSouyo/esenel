@@ -11,7 +11,7 @@ import { clampToCircle } from '@/lib/craftBoundary';
  * scaled (via the Transformer in BouquetCanvas), flipped, selected and
  * removed. Physics only happened once, while it was falling.
  */
-export function BouquetItem({ item, asset, isSelected, boundary, onSelect, onChange, onCommit, registerNode }) {
+export function BouquetItem({ item, asset, isSelected, boundary, onSelect, onChange, onCommit, registerNode, opacity = 1 }) {
   const image = useHtmlImage(asset.src);
   const shapeRef = useRef(null);
   const mountedRef = useRef(false);
@@ -116,6 +116,7 @@ export function BouquetItem({ item, asset, isSelected, boundary, onSelect, onCha
       shadowOpacity={isSelected ? 0.3 : 0.12}
       shadowBlur={isSelected ? 16 : 7}
       shadowOffsetY={5}
+      opacity={opacity}
     />
   );
 }

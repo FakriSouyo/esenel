@@ -12,13 +12,13 @@ const SETTLE_SPEED = 0.45;
 
 /**
  * Matter.js world used ONLY for the brief moment a flower falls into the
- * vase. Gravity, the vase walls/floor, AND the already-settled flowers
+ * wrap bouquet. Gravity, the cone walls/floor, AND the already-settled flowers
  * (as static bodies) collide with the falling body, so flowers pile up
  * naturally instead of all landing in one layer. As soon as a body
  * settles (or times out) it is removed and the caller receives its final
  * x / y / rotation to hand off to a plain Konva node.
  */
-export function PhysicsDrop({ dropQueue, boundary, settled, onDropConsumed, onSettle }) {
+export function PhysicsDrop({ dropQueue, boundary, wrap, settled, onDropConsumed, onSettle }) {
   const engineRef = useRef(null);
   const wallsRef = useRef([]); // static vase floor + walls
   const settledBodiesRef = useRef(new Map()); // static bodies for settled flowers
@@ -42,34 +42,43 @@ export function PhysicsDrop({ dropQueue, boundary, settled, onDropConsumed, onSe
     };
   }, []);
 
-  // Rebuild the vase walls whenever the canvas resizes.
+  // Rebuild the wrap cone boundaries whenever the canvas resizes.
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine || boundary.radius <= 0) return;
+    if (!engine || !wrap) return;
 
     if (wallsRef.current.length) Matter.World.remove(engine.world, wallsRef.current);
 
-    const floorY = boundary.cy + boundary.radius * 0.42;
-    const floor = Matter.Bodies.rectangle(boundary.cx, floorY, boundary.radius * 2.4, 26, {
+    const centerX = wrap.wrapX + wrap.wrapWidth / 2;
+    
+    // Floor at the bottom of the cone
+    const floor = Matter.Bodies.rectangle(centerX, wrap.floorY, wrap.bottomWidth, 26, {
       isStatic: true,
       friction: 0.7,
     });
-    const wallHeight = boundary.radius * 1.9;
-    const leftWall = Matter.Bodies.rectangle(boundary.cx - boundary.radius * 0.82, boundary.cy, 26, wallHeight, {
+    
+    // Left wall - angled to match cone taper
+    const wallHeight = wrap.wrapHeight - 40;
+    const leftWallX = centerX - wrap.bottomWidth / 2 + 20;
+    const leftWallY = wrap.wrapY + wrap.wrapHeight / 2;
+    const leftWall = Matter.Bodies.rectangle(leftWallX, leftWallY, 26, wallHeight, {
       isStatic: true,
-      angle: 0.14,
+      angle: 0.25, // angled inward for cone shape
       friction: 0.5,
     });
-    const rightWall = Matter.Bodies.rectangle(boundary.cx + boundary.radius * 0.82, boundary.cy, 26, wallHeight, {
+    
+    // Right wall - angled to match cone taper
+    const rightWallX = centerX + wrap.bottomWidth / 2 - 20;
+    const rightWallY = wrap.wrapY + wrap.wrapHeight / 2;
+    const rightWall = Matter.Bodies.rectangle(rightWallX, rightWallY, 26, wallHeight, {
       isStatic: true,
-      angle: -0.14,
+      angle: -0.25, // angled inward for cone shape
       friction: 0.5,
     });
 
     wallsRef.current = [floor, leftWall, rightWall];
     Matter.World.add(engine.world, wallsRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boundary.cx, boundary.cy, boundary.radius]);
+  }, [wrap]);
 
   // Keep a static collision body for every settled flower, so new drops
   // pile up on top of the ones already in the vase.
@@ -102,15 +111,18 @@ export function PhysicsDrop({ dropQueue, boundary, settled, onDropConsumed, onSe
   // Watch for newly requested drops and give each one a physics body.
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine || !wrap) return;
 
     dropQueue.forEach((req) => {
       if (bodiesRef.current.has(req.reqId)) return;
-      const asset = getCraftAsset(req.assetId);
+      const asset = getCraftAsset(req.assetId, req.pose || 'front');
       if (!asset) return;
-      const spread = boundary.radius * 0.4;
-      const startX = boundary.cx + (Math.random() - 0.5) * spread;
-      const startY = boundary.cy - boundary.radius - 70;
+      
+      // Spawn flowers at the top center of the wrap cone (narrower opening)
+      const centerX = wrap.wrapX + wrap.wrapWidth / 2;
+      const spread = wrap.topWidth * 0.6; // narrow spawn area matching cone top
+      const startX = centerX + (Math.random() - 0.5) * spread;
+      const startY = wrap.wrapY - 70; // above the cone opening
 
       const body = Matter.Bodies.circle(startX, startY, asset.radius, {
         restitution: 0.32,
@@ -122,13 +134,13 @@ export function PhysicsDrop({ dropQueue, boundary, settled, onDropConsumed, onSe
       Matter.Body.setVelocity(body, { x: (Math.random() - 0.5) * 1.6, y: 0 });
 
       Matter.World.add(engine.world, body);
-      bodiesRef.current.set(req.reqId, { body, assetId: req.assetId, startTime: performance.now() });
+      bodiesRef.current.set(req.reqId, { body, assetId: req.assetId, pose: req.pose || 'front', startTime: performance.now() });
       setActiveIds((ids) => [...ids, req.reqId]);
       onDropConsumed(req.reqId);
       ensureLoopRunning();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dropQueue, boundary.cx, boundary.cy, boundary.radius]);
+  }, [dropQueue, wrap]);
 
   function ensureLoopRunning() {
     // One loop at a time; the watchdog keeps it alive even if rAF stalls
@@ -212,7 +224,7 @@ export function PhysicsDrop({ dropQueue, boundary, settled, onDropConsumed, onSe
       {activeIds.map((id) => {
         const entry = bodiesRef.current.get(id);
         if (!entry) return null;
-        const asset = getCraftAsset(entry.assetId);
+        const asset = getCraftAsset(entry.assetId, entry.pose);
         if (!asset) return null;
         return (
           <FallingFlower
