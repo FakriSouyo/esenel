@@ -35,3 +35,6 @@ next-env.d.ts
 
 # codebuff / freebuff workspace state
 .freebuff/
+
+# kiro AI coding tool specs
+.kiro/
