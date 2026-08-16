@@ -4,14 +4,15 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Image as KonvaImage } from 'react-konva';
 import Konva from 'konva';
 import { useHtmlImage } from '@/hooks/useHtmlImage';
-import { clampToCircle } from '@/lib/craftBoundary';
+import { clampToTrapezoid } from '@/lib/craftBoundary';
+import { flowerDisplaySize } from '@/lib/craftAssets';
 
 /**
  * A settled flower: a plain Konva.Image that can be dragged, rotated /
  * scaled (via the Transformer in BouquetCanvas), flipped, selected and
  * removed. Physics only happened once, while it was falling.
  */
-export function BouquetItem({ item, asset, isSelected, boundary, onSelect, onChange, onCommit, registerNode, opacity = 1 }) {
+export function BouquetItem({ item, asset, isSelected, bounds, onSelect, onChange, onCommit, registerNode, opacity = 1 }) {
   const image = useHtmlImage(asset.src);
   const shapeRef = useRef(null);
   const mountedRef = useRef(false);
@@ -39,10 +40,7 @@ export function BouquetItem({ item, asset, isSelected, boundary, onSelect, onCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [image]);
 
-  const dragBoundFunc = useCallback(
-    (pos) => clampToCircle(pos, boundary.cx, boundary.cy, boundary.radius, 0.72),
-    [boundary]
-  );
+  const dragBoundFunc = useCallback((pos) => clampToTrapezoid(pos, bounds), [bounds]);
 
   const bounce = useCallback(() => {
     const node = shapeRef.current;
@@ -77,7 +75,7 @@ export function BouquetItem({ item, asset, isSelected, boundary, onSelect, onCha
 
   if (!image) return null;
 
-  const size = asset.radius * 2;
+  const { w: size, h: displayHeight } = flowerDisplaySize(asset, 1);
 
   return (
     <KonvaImage
@@ -86,9 +84,9 @@ export function BouquetItem({ item, asset, isSelected, boundary, onSelect, onCha
       x={item.x}
       y={item.y}
       width={size}
-      height={size}
+      height={displayHeight}
       offsetX={size / 2}
-      offsetY={size / 2}
+      offsetY={displayHeight / 2}
       rotation={item.rotation}
       scaleX={item.flip ? -item.scale : item.scale}
       scaleY={item.scale}

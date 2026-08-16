@@ -33,7 +33,7 @@ describe('craftAssets - Helper Functions', () => {
       expect(asset).toBeDefined();
       expect(asset.id).toBe('rose_pink');
       expect(asset.name).toBe('Pink Rose');
-      expect(asset.src).toBe('/flowers/rose_pink/rose_pink_front.png');
+      expect(asset.src).toBe('/flowers/rose_pink/rose_pink_front.webp');
     });
 
     it('should return asset with specified left pose', () => {
@@ -41,7 +41,7 @@ describe('craftAssets - Helper Functions', () => {
       
       expect(asset).toBeDefined();
       expect(asset.id).toBe('rose_pink');
-      expect(asset.src).toBe('/flowers/rose_pink/rose_pink_left.png');
+      expect(asset.src).toBe('/flowers/rose_pink/rose_pink_left.webp');
     });
 
     it('should return asset with specified right pose', () => {
@@ -49,7 +49,7 @@ describe('craftAssets - Helper Functions', () => {
       
       expect(asset).toBeDefined();
       expect(asset.id).toBe('dahlia');
-      expect(asset.src).toBe('/flowers/dahlia/dahlia_right.png');
+      expect(asset.src).toBe('/flowers/dahlia/dahlia_right.webp');
     });
 
     it('should return asset with specified free pose', () => {
@@ -57,7 +57,7 @@ describe('craftAssets - Helper Functions', () => {
       
       expect(asset).toBeDefined();
       expect(asset.id).toBe('lily');
-      expect(asset.src).toBe('/flowers/lily/lily_free.png');
+      expect(asset.src).toBe('/flowers/lily/lily_free.webp');
     });
 
     it('should return undefined for non-existent asset', () => {
@@ -76,7 +76,7 @@ describe('craftAssets - Helper Functions', () => {
       expect(asset.price).toBe(18000);
       expect(asset.radius).toBe(30);
       expect(asset.scale).toBe(1);
-      expect(asset.srcTemplate).toBe('/flowers/anthurium/anthurium_{pose}.png');
+      expect(asset.srcTemplate).toBe('/flowers/anthurium/anthurium_{pose}.webp');
       expect(asset.poses).toEqual(['front', 'left', 'right', 'free']);
     });
 
@@ -99,7 +99,7 @@ describe('craftAssets - Helper Functions', () => {
         poses.forEach((pose) => {
           const asset = getCraftAsset(id, pose);
           expect(asset).toBeDefined();
-          expect(asset.src).toBe(`/flowers/${id}/${id}_${pose}.png`);
+          expect(asset.src).toBe(`/flowers/${id}/${id}_${pose}.webp`);
         });
       });
     });
@@ -141,7 +141,7 @@ describe('craftAssets - Helper Functions', () => {
     it('should return correct src path for valid flower and pose', () => {
       const src = getFlowerPoseSrc('rose_pink', 'left');
       
-      expect(src).toBe('/flowers/rose_pink/rose_pink_left.png');
+      expect(src).toBe('/flowers/rose_pink/rose_pink_left.webp');
     });
 
     it('should return correct src for all poses of a flower', () => {
@@ -149,7 +149,7 @@ describe('craftAssets - Helper Functions', () => {
       
       poses.forEach((pose) => {
         const src = getFlowerPoseSrc('dahlia', pose);
-        expect(src).toBe(`/flowers/dahlia/dahlia_${pose}.png`);
+        expect(src).toBe(`/flowers/dahlia/dahlia_${pose}.webp`);
       });
     });
 
@@ -158,7 +158,7 @@ describe('craftAssets - Helper Functions', () => {
       
       flowerIds.forEach((id) => {
         const src = getFlowerPoseSrc(id, 'front');
-        expect(src).toBe(`/flowers/${id}/${id}_front.png`);
+        expect(src).toBe(`/flowers/${id}/${id}_front.webp`);
       });
     });
 
@@ -175,7 +175,7 @@ describe('craftAssets - Helper Functions', () => {
       flowerIds.forEach((id) => {
         poses.forEach((pose) => {
           const src = getFlowerPoseSrc(id, pose);
-          expect(src).toBe(`/flowers/${id}/${id}_${pose}.png`);
+          expect(src).toBe(`/flowers/${id}/${id}_${pose}.webp`);
         });
       });
     });

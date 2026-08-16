@@ -1134,7 +1134,7 @@ describe('Property 2: Preservation - Existing Interaction Patterns', () => {
       
       flowerAssets.forEach(asset => {
         const assetWithSrc = getCraftAsset(asset.id);
-        expect(assetWithSrc.src).toMatch(/\/flowers\/\w+\/\w+_(front|left|right|free)\.png/);
+        expect(assetWithSrc.src).toMatch(/\/flowers\/\w+\/\w+_(front|left|right|free)\.webp/);
       });
     });
   });

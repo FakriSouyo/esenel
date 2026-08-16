@@ -117,7 +117,7 @@ describe('Property 1: Bug Condition - Wrap Bouquet with Multi-Pose Flowers and L
       
       expectedFlowers.forEach(flower => {
         expectedPoses.forEach(pose => {
-          const filePath = path.join(publicDir, flower, `${flower}_${pose}.png`);
+          const filePath = path.join(publicDir, flower, `${flower}_${pose}.webp`);
           expect(fs.existsSync(filePath)).toBe(true);
         });
       });
@@ -136,7 +136,7 @@ describe('Property 1: Bug Condition - Wrap Bouquet with Multi-Pose Flowers and L
       expect(asset.src || asset.srcTemplate).toBeDefined();
       
       // Should generate correct path for the pose
-      const expectedPath = '/flowers/rose_pink/rose_pink_left.png';
+      const expectedPath = '/flowers/rose_pink/rose_pink_left.webp';
       const actualPath = typeof asset.src === 'function' 
         ? asset.src('left')
         : asset.src;

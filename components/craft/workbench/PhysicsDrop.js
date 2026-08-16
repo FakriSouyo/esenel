@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 import { Image as KonvaImage } from 'react-konva';
 import { useHtmlImage } from '@/hooks/useHtmlImage';
-import { getCraftAsset } from '@/lib/craftAssets';
+import { getCraftAsset, flowerDisplaySize } from '@/lib/craftAssets';
 
 const MIN_FALL_MS = 500;
 const MAX_FALL_MS = 1300;
@@ -230,7 +230,7 @@ export function PhysicsDrop({ dropQueue, boundary, wrap, settled, onDropConsumed
           <FallingFlower
             key={id}
             src={asset.src}
-            size={asset.radius * 2}
+            asset={asset}
             registerNode={(node) => {
               if (node) nodesRef.current.set(id, node);
             }}
@@ -241,17 +241,18 @@ export function PhysicsDrop({ dropQueue, boundary, wrap, settled, onDropConsumed
   );
 }
 
-function FallingFlower({ src, size, registerNode }) {
+function FallingFlower({ src, asset, registerNode }) {
   const image = useHtmlImage(src);
+  const { w: size, h: displayHeight } = flowerDisplaySize(asset, 1);
   if (!image) return null;
   return (
     <KonvaImage
       ref={registerNode}
       image={image}
       width={size}
-      height={size}
+      height={displayHeight}
       offsetX={size / 2}
-      offsetY={size / 2}
+      offsetY={displayHeight / 2}
       listening={false}
       shadowColor="#23301F"
       shadowOpacity={0.18}

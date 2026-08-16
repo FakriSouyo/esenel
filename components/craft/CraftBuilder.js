@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import {
   Check,
   ArrowLeft,
@@ -15,6 +16,9 @@ import { CRAFT_ASSETS } from '@/lib/craftAssets';
 import { useCart } from '@/components/cart/CartContext';
 import { formatIDR } from '@/lib/format';
 import { BouquetWorkbench } from './workbench/BouquetWorkbench';
+import { useBouquetState } from '@/hooks/useBouquetState';
+import { WRAP_THEMES } from '@/lib/wrapThemes';
+import { WRAP_SHAPES } from '@/lib/wrapShapes';
 
 const STEPS = [
   { id: 1, label: 'Size', title: 'Choose your size.', desc: 'Every bouquet starts with a size — from a quiet gesture to a statement.' },
@@ -23,12 +27,6 @@ const STEPS = [
   { id: 4, label: 'Note', title: 'Add a note.', desc: 'A few words go a long way. We hand-write it and tuck it in with the bouquet.' },
   { id: 5, label: 'Review', title: 'Almost ready.', desc: 'Take a look before it goes to the atelier.' },
 ];
-
-const sizeImages = {
-  small: '/small.jpg',
-  medium: '/medium.jpg',
-  large: '/large.jpg',
-};
 
 const noteSuggestions = [
   'Happy anniversary',
@@ -40,6 +38,7 @@ const noteSuggestions = [
 const ease = [0.16, 1, 0.3, 1];
 
 export default function CraftBuilder() {
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [sizeId, setSizeId] = useState(craftSizes[1].id);
   const [quantities, setQuantities] = useState({});
@@ -47,6 +46,31 @@ export default function CraftBuilder() {
   const [note, setNote] = useState('');
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
+
+  // The bouquet (and its paper choices) live HERE so the arrangement
+  // survives step navigation — going back and forward never wipes the
+  // flowers. Passed down to the workbench as props.
+  const bouquet = useBouquetState();
+  const [theme, setTheme] = useState(WRAP_THEMES.kraft.id);
+  const [shapeId, setShapeId] = useState(WRAP_SHAPES.klasik.id);
+
+  // A step beyond the flowers step is only reachable once flowers exist —
+  // the wrapping / note / review steps can't be jumped to with an empty
+  // bouquet, even by clicking the stepper at the top.
+  const canOpenStep = (target) => target <= 2 || totalStems > 0;
+  const gotoStep = (target) => {
+    if (target < 1 || target > STEPS.length) return;
+    if (!canOpenStep(target)) return;
+    setStep(target);
+  };
+
+  const goBack = () => {
+    if (step === 1) {
+      router.push('/');
+      return;
+    }
+    setStep((s) => Math.max(1, s - 1));
+  };
 
   const size = craftSizes.find((s) => s.id === sizeId);
   const wrapping = craftWrappings.find((w) => w.id === wrappingId);
@@ -124,9 +148,13 @@ export default function CraftBuilder() {
               return (
                 <button
                   key={s.id}
-                  onClick={() => setStep(s.id)}
+                  onClick={() => gotoStep(s.id)}
+                  disabled={s.id > 2 && totalStems === 0}
                   aria-label={s.title}
-                  className={`group flex items-center gap-1.5 ${active || done ? 'text-ink' : 'text-ink/30'}`}
+                  title={s.id > 2 && totalStems === 0 ? 'Add flowers first' : s.title}
+                  className={`group flex items-center gap-1.5 ${
+                    active || done ? 'text-ink' : 'text-ink/30'
+                  } ${s.id > 2 && totalStems === 0 ? 'cursor-not-allowed' : ''}`}
                 >
                   <span
                     className={`grid size-6 place-items-center rounded-full border text-[10px] font-medium transition-colors ${
@@ -160,48 +188,60 @@ export default function CraftBuilder() {
             </div>
 
             {step === 1 && (
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-2.5">
                 {craftSizes.map((s) => {
                   const selected = sizeId === s.id;
                   return (
                     <button
                       key={s.id}
+                      type="button"
                       onClick={() => setSizeId(s.id)}
-                      className={`group overflow-hidden rounded-2xl border bg-white text-left transition-all duration-300 ${
+                      aria-pressed={selected}
+                      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 text-left transition-all duration-200 ${
                         selected
-                          ? 'border-ink shadow-[0_10px_28px_rgba(32,34,30,0.14)]'
-                          : 'border-sand hover:border-ink/30'
+                          ? 'border-ink bg-ink text-cloud shadow-[0_10px_28px_rgba(32,34,30,0.14)]'
+                          : 'border-sand bg-white hover:border-ink/35 hover:bg-white/80'
                       }`}
                     >
-                      <div className="relative aspect-[4/5] overflow-hidden bg-sand/40">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={sizeImages[s.id]}
-                          alt={s.label}
-                          className="h-full w-full object-cover transition-transform duration-700 ease-esenel-out group-hover:scale-[1.05]"
-                        />
+                      <span className="flex items-center gap-3">
                         <span
-                          className={`absolute right-2.5 top-2.5 grid size-6 place-items-center rounded-full transition-all duration-300 ${
-                            selected ? 'bg-ink text-cloud scale-100' : 'bg-white/85 text-ink/0 scale-75'
+                          className={`grid size-5 shrink-0 place-items-center rounded-full border transition-colors ${
+                            selected ? 'border-cloud bg-cloud text-ink' : 'border-ink/25'
                           }`}
                         >
-                          <Check size={13} />
+                          {selected && <Check size={12} />}
                         </span>
-                      </div>
-                      <div className="px-3 py-3.5">
-                        <p className="font-display text-lg leading-none">{s.label}</p>
-                        <p className="mt-1.5 text-[11px] text-ink/45">{s.stemCount} stems (approx.)</p>
-                        <p className="mt-2 text-[13px] font-medium">{formatIDR(s.basePrice)}</p>
-                      </div>
+                        <span>
+                          <span className="block font-display text-lg leading-none">{s.label}</span>
+                          <span className={`mt-1 block text-[11px] ${selected ? 'text-cloud/65' : 'text-ink/45'}`}>
+                            {s.stemCount} stems (approx.)
+                          </span>
+                        </span>
+                      </span>
+                      <span className={`shrink-0 text-sm font-medium ${selected ? 'text-cloud' : 'text-ink'}`}>
+                        {formatIDR(s.basePrice)}
+                      </span>
                     </button>
                   );
                 })}
+                <p className="mt-1 text-xs text-ink/40">
+                  The bouquet — paper, fan and flower area — grows with the size you pick.
+                </p>
               </div>
             )}
 
             {step === 2 && (
               <>
-                <BouquetWorkbench onFlowersChange={setQuantities} />
+                <BouquetWorkbench
+                  onFlowersChange={setQuantities}
+                  sizeId={sizeId}
+                  sizeLabel={size.label}
+                  bouquet={bouquet}
+                  theme={theme}
+                  onThemeChange={setTheme}
+                  shapeId={shapeId}
+                  onShapeChange={setShapeId}
+                />
                 <p className="mt-4 text-center text-xs text-ink/40">
                   Tap a flower to drop it in — drag, rotate and scale each stem. Press ⌘Z to undo.
                 </p>
@@ -343,12 +383,12 @@ export default function CraftBuilder() {
         </div>
         <div className="mt-6 flex items-center justify-between">
           <button
-            onClick={() => setStep((s) => Math.max(1, s - 1))}
-            disabled={step === 1}
-            className="inline-flex items-center gap-2 text-[13px] tracking-nav font-medium text-ink/60 transition-colors hover:text-ink disabled:opacity-25"
+            onClick={goBack}
+            title={step === 1 ? 'Back to home' : 'Previous step'}
+            className="inline-flex items-center gap-2 text-[13px] tracking-nav font-medium text-ink/60 transition-colors hover:text-ink"
           >
             <ArrowLeft size={15} />
-            BACK
+            {step === 1 ? 'HOME' : 'BACK'}
           </button>
           {step < 5 ? (
             <button

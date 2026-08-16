@@ -9,6 +9,7 @@ export const craftSizes = [
   { id: 'small', label: 'Small', basePrice: 220000, stemCount: 6 },
   { id: 'medium', label: 'Medium', basePrice: 350000, stemCount: 10 },
   { id: 'large', label: 'Large', basePrice: 520000, stemCount: 16 },
+  { id: 'extra-large', label: 'Extra Large', basePrice: 700000, stemCount: 22 },
 ];
 
 export const craftFlowers = [

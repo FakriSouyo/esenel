@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Undo2, Redo2, Trash2, Copy, FlipHorizontal2, ChevronUp, ChevronDown, Sparkles, Lock, Unlock } from 'lucide-react';
 import { useBouquetState } from '@/hooks/useBouquetState';
-import { getCraftAsset } from '@/lib/craftAssets';
+import { getCraftAsset, getFlowerPoseSrc, POSE_LABELS } from '@/lib/craftAssets';
 import { formatIDR } from '@/lib/format';
+import { WRAP_THEMES } from '@/lib/wrapThemes';
+import { WRAP_SHAPES } from '@/lib/wrapShapes';
 import { AssetPicker } from './AssetPicker';
 
 // react-konva touches the DOM/canvas directly — client only.
@@ -20,10 +22,29 @@ const BouquetCanvas = dynamic(() => import('./BouquetCanvas').then((m) => m.Bouq
  * Reports the current flower counts upward via `onFlowersChange` so the
  * wizard's price / summary / preview stay in sync.
  */
-export function BouquetWorkbench({ onFlowersChange }) {
-  const bouquet = useBouquetState();
+export function BouquetWorkbench({
+  onFlowersChange,
+  sizeId = 'medium',
+  sizeLabel = 'Medium',
+  bouquet: bouquetProp,
+  theme: themeProp,
+  onThemeChange: onThemeChangeProp,
+  shapeId: shapeIdProp,
+  onShapeChange: onShapeChangeProp,
+}) {
+  // When CraftBuilder lifts the state up (so the arrangement survives step
+  // navigation), it passes the hook down; otherwise the workbench owns it.
+  const internalBouquet = useBouquetState();
+  const bouquet = bouquetProp ?? internalBouquet;
   const [dropQueue, setDropQueue] = useState([]);
   const [touched, setTouched] = useState(false);
+  const [theme, setTheme] = useState(themeProp ?? 'kraft');
+  const [shapeId, setShapeId] = useState(shapeIdProp ?? 'klasik');
+  const boundsRef = useRef(null);
+  const themeValue = themeProp ?? theme;
+  const shapeValue = shapeIdProp ?? shapeId;
+  const handleThemeChange = onThemeChangeProp ?? setTheme;
+  const handleShapeChange = onShapeChangeProp ?? setShapeId;
 
   const counts = useMemo(() => {
     const c = {};
@@ -96,6 +117,7 @@ export function BouquetWorkbench({ onFlowersChange }) {
   };
 
   const selected = bouquet.items.find((i) => i.id === bouquet.selectedId) ?? null;
+  const selectedAsset = selected ? getCraftAsset(selected.assetId, selected.pose) : null;
 
   const handleLockedFlowerClick = (id) => {
     if (window.confirm('This flower is locked. Unlock it?')) {
@@ -111,8 +133,8 @@ export function BouquetWorkbench({ onFlowersChange }) {
           <p className="text-[11px] tracking-[0.18em] uppercase text-ink/40">Bouquet workbench</p>
           <p className="mt-0.5 truncate text-sm text-ink/70">
             {bouquet.items.length === 0
-              ? 'Tap a flower below to drop it in'
-              : `${bouquet.items.length} ${bouquet.items.length === 1 ? 'stem' : 'stems'} · ${formatIDR(totalPrice)}`}
+              ? `Tap a flower below to drop it in · ${sizeLabel} bouquet`
+              : `${bouquet.items.length} ${bouquet.items.length === 1 ? 'stem' : 'stems'} · ${formatIDR(totalPrice)} · ${sizeLabel}`}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -123,12 +145,62 @@ export function BouquetWorkbench({ onFlowersChange }) {
             <Redo2 size={15} />
           </IconBtn>
           <span className="mx-1 h-5 w-px bg-sand" />
-          <IconBtn onClick={bouquet.shuffle} disabled={!bouquet.items.length} title="Shuffle arrangement">
+          <IconBtn
+            onClick={() => bouquet.shuffle(boundsRef.current)}
+            disabled={!bouquet.items.length}
+            title="Shuffle arrangement"
+          >
             <Sparkles size={15} />
           </IconBtn>
           <IconBtn onClick={bouquet.clearAll} disabled={!bouquet.items.length} title="Clear all" danger>
             <Trash2 size={15} />
           </IconBtn>
+        </div>
+      </div>
+
+      {/* ── paper theme swatches ── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand/70 px-4 py-2 sm:px-5">
+        <p className="text-[11px] tracking-[0.18em] uppercase text-ink/40">Paper</p>
+        <div className="flex items-center gap-2">
+          {Object.values(WRAP_THEMES).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => handleThemeChange(t.id)}
+              aria-pressed={themeValue === t.id}
+              title={t.label}
+              aria-label={t.label}
+              className={`h-6 w-6 rounded-full border shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] transition-all active:scale-90 ${
+                themeValue === t.id
+                  ? 'scale-110 border-[#23301F] ring-2 ring-[#23301F]/25'
+                  : 'border-sand hover:scale-105'
+              }`}
+              style={{ background: t.base }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── wrap shape ── */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sand/70 px-4 py-2 sm:px-5">
+        <p className="text-[11px] tracking-[0.18em] uppercase text-ink/40">Shape</p>
+        <div className="flex items-center gap-1 rounded-full bg-ink/[0.05] p-1">
+          {Object.values(WRAP_SHAPES).map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => handleShapeChange(s.id)}
+              aria-pressed={shapeValue === s.id}
+              title={s.desc}
+              className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors active:scale-95 ${
+                shapeValue === s.id
+                  ? 'bg-[#23301F] text-cloud shadow-[0_2px_8px_rgba(35,48,31,0.35)]'
+                  : 'text-ink/60 hover:bg-white/70 hover:text-ink'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -145,6 +217,33 @@ export function BouquetWorkbench({ onFlowersChange }) {
           <ActionBtn onClick={() => selected && bouquet.flipItem(selected.id)} label="Flip">
             <FlipHorizontal2 size={14} />
           </ActionBtn>
+          <span className="mx-1 h-5 w-px bg-sand" />
+
+          {/* pose switcher — every flower has 4 poses */}
+          {selected && selectedAsset?.poses && (
+            <div className="flex items-center gap-1 rounded-full bg-ink/[0.05] p-1">
+              {selectedAsset.poses.map((pose) => (
+                <button
+                  key={pose}
+                  type="button"
+                  onClick={() => bouquet.setPose(selected.id, pose)}
+                  title={`${POSE_LABELS[pose]} pose`}
+                  aria-pressed={selected.pose === pose}
+                  className={`grid size-7 place-items-center rounded-full transition-all active:scale-90 ${
+                    selected.pose === pose ? 'bg-[#23301F] shadow-[0_2px_8px_rgba(35,48,31,0.35)]' : 'hover:bg-white/70'
+                  }`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={getFlowerPoseSrc(selected.assetId, pose)}
+                    alt={POSE_LABELS[pose]}
+                    className={`h-5 w-5 object-contain ${selected.pose === pose ? 'brightness-[1.6]' : ''}`}
+                    draggable={false}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
           <span className="mx-1 h-5 w-px bg-sand" />
           <ActionBtn onClick={() => selected && bouquet.toggleLock(selected.id)} label={selected?.locked ? 'Unlock' : 'Lock'}>
             {selected?.locked ? <Unlock size={14} /> : <Lock size={14} />}
@@ -168,6 +267,7 @@ export function BouquetWorkbench({ onFlowersChange }) {
         <BouquetCanvas
           items={bouquet.items}
           selectedId={bouquet.selectedId}
+          selectedItem={selected}
           dropQueue={dropQueue}
           settled={settled}
           onSelect={bouquet.selectItem}
@@ -176,6 +276,30 @@ export function BouquetWorkbench({ onFlowersChange }) {
           onDropConsumed={handleDropConsumed}
           onFlowerSettled={handleFlowerSettled}
           onLockedFlowerClick={handleLockedFlowerClick}
+          onRemapItems={bouquet.remapItems}
+          onAddFlower={handleAssetSelect}
+          onSetPose={bouquet.setPose}
+          onToggleLock={bouquet.toggleLock}
+          onDuplicate={bouquet.duplicateItem}
+          onFlip={bouquet.flipItem}
+          onForward={bouquet.bringForward}
+          onBackward={bouquet.sendBackward}
+          onRemove={bouquet.removeItem}
+          onUndo={bouquet.undo}
+          onRedo={bouquet.redo}
+          onClear={bouquet.clearAll}
+          canUndo={bouquet.past.length > 0}
+          canRedo={bouquet.future.length > 0}
+          canClear={bouquet.items.length > 0}
+          theme={themeValue}
+          onThemeChange={handleThemeChange}
+          shapeId={shapeValue}
+          onShapeChange={handleShapeChange}
+          sizeId={sizeId}
+          sizeLabel={sizeLabel}
+          onBoundsChange={(b) => {
+            boundsRef.current = b;
+          }}
         />
 
         {/* empty-state hint */}
@@ -189,7 +313,7 @@ export function BouquetWorkbench({ onFlowersChange }) {
       </div>
 
       {/* ── asset picker ── */}
-      <AssetPicker onSelect={handleAssetSelect} />
+      <AssetPicker onSelect={handleAssetSelect} counts={counts} />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { getCraftAsset } from '@/lib/craftAssets';
+import { clampToTrapezoid } from '@/lib/craftBoundary';
 
 let seq = 0;
 const nextId = () => `item-${++seq}-${Date.now().toString(36)}`;
@@ -78,6 +79,19 @@ export function useBouquetState() {
     });
   }, []);
 
+  // Canvas layout change (fullscreen / resize): reposition every flower
+  // proportionally — including locked ones, since the bouquet itself moved.
+  // No undo step: it is not a user edit. `fn` maps { x, y } → new { x, y }.
+  const remapItems = useCallback((fn) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        const p = fn(it);
+        if (!p) return it;
+        return { ...it, x: p.x, y: p.y, zIndex: Math.round(p.y * 10) };
+      })
+    );
+  }, []);
+
   // End of a drag / transform — one undo step.
   const commitItem = useCallback(
     (id, patch) => {
@@ -116,28 +130,40 @@ export function useBouquetState() {
     [commit]
   );
 
+  // Swap with the neighbour in the array AND carry each slot's zIndex with
+  // it — the array move satisfies the public API, the zIndex swap is what
+  // actually changes the rendered depth (items are drawn sorted by zIndex),
+  // so the Forward/Backward buttons are visible on canvas.
+  const swapNeighbour = useCallback((prev, id, dir) => {
+    const idx = prev.findIndex((it) => it.id === id);
+    const other = idx + dir;
+    if (other < 0 || other >= prev.length) return prev;
+    const next = [...prev];
+    const a = next[idx];
+    const b = next[other];
+    next[idx] = { ...b, zIndex: a.zIndex };
+    next[other] = { ...a, zIndex: b.zIndex };
+    return next;
+  }, []);
+
   const bringForward = useCallback(
     (id) => {
-      commit((prev) => {
-        const idx = prev.findIndex((it) => it.id === id);
-        if (idx < 0 || idx >= prev.length - 1) return prev;
-        const next = [...prev];
-        [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-        return next;
-      });
+      commit((prev) => swapNeighbour(prev, id, +1));
     },
-    [commit]
+    [commit, swapNeighbour]
   );
 
   const sendBackward = useCallback(
     (id) => {
-      commit((prev) => {
-        const idx = prev.findIndex((it) => it.id === id);
-        if (idx <= 0) return prev;
-        const next = [...prev];
-        [next[idx], next[idx - 1]] = [next[idx - 1], next[idx]];
-        return next;
-      });
+      commit((prev) => swapNeighbour(prev, id, -1));
+    },
+    [commit, swapNeighbour]
+  );
+
+  // Switch the pose of an already-placed flower (Front / Left / Right / Free).
+  const setPose = useCallback(
+    (id, pose) => {
+      commit((prev) => prev.map((it) => (it.id === id ? { ...it, pose } : it)));
     },
     [commit]
   );
@@ -170,21 +196,33 @@ export function useBouquetState() {
     });
   }, [items]);
 
-  // Scatter everything a little inside the vase (no physics re-run).
-  const shuffle = useCallback(() => {
-    if (items.length === 0) return;
-    commit((prev) =>
-      prev.map((it) => {
-        const asset = getCraftAsset(it.assetId, it.pose);
-        const r = 90 + Math.random() * 40;
-        const a = Math.random() * Math.PI * 2;
-        const d = Math.random() * 0.55;
-        const x = it.x + Math.cos(a) * r * d;
-        const y = it.y + Math.sin(a) * r * d * 0.8;
-        return { ...it, x, y, rotation: (Math.random() - 0.5) * 60, zIndex: Math.round(y * 10) };
-      })
-    );
-  }, [items.length, commit]);
+  // Scatter everything a little inside the bouquet (no physics re-run). When
+  // `bounds` is given, every shuffled flower is clamped to the drag limit, so
+  // the arrangement can never end up covering the paper below the mouth.
+  const shuffle = useCallback(
+    (bounds) => {
+      if (items.length === 0) return;
+      commit((prev) =>
+        prev.map((it) => {
+          // Small, gentle scatter — flowers stay clustered at the mouth
+          // instead of jumping far up/down/sideways (the trapezoid clamp
+          // catches anything that would leave the region).
+          const r = 26 + Math.random() * 34;
+          const a = Math.random() * Math.PI * 2;
+          const d = Math.random() * 0.55;
+          let x = it.x + Math.cos(a) * r * d;
+          let y = it.y + Math.sin(a) * r * d * 0.55;
+          if (bounds) {
+            const p = clampToTrapezoid({ x, y }, bounds);
+            x = p.x;
+            y = p.y;
+          }
+          return { ...it, x, y, rotation: (Math.random() - 0.5) * 60, zIndex: Math.round(y * 10) };
+        })
+      );
+    },
+    [items.length, commit]
+  );
 
   const toggleLock = useCallback(
     (id) => {
@@ -211,6 +249,7 @@ export function useBouquetState() {
     future,
     addItem,
     updateItem,
+    remapItems,
     commitItem,
     removeItem,
     duplicateItem,
@@ -223,5 +262,6 @@ export function useBouquetState() {
     shuffle,
     selectItem,
     toggleLock,
+    setPose,
   };
 }
