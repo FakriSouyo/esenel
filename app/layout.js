@@ -1,15 +1,21 @@
 import './globals.css';
-import Navbar from '@/components/navbar/Navbar';
-import Footer from '@/components/footer/Footer';
+import Chrome from '@/components/Chrome';
 import LenisProvider from '@/components/LenisProvider';
 import { CartProvider } from '@/components/cart/CartContext';
 import CartDrawer from '@/components/cart/CartDrawer';
 import ProgressiveBlur from '@/components/effects/ProgressiveBlur';
-import Preloader from '@/components/preloader/Preloader';
 
 export const metadata = {
   title: 'ESENEL — Fleur Atelier',
   description: 'Fresh flowers, thoughtfully arranged. ESENEL is a contemporary fleur atelier.',
+  icons: {
+    icon: [
+      { url: '/favicon_io/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon_io/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    apple: [{ url: '/favicon_io/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  manifest: '/favicon_io/site.webmanifest',
 };
 
 export default function RootLayout({ children }) {
@@ -28,10 +34,9 @@ export default function RootLayout({ children }) {
       </head>
       <body className="font-body antialiased bg-cloud text-ink">
         <LenisProvider>
-          {/* Word preloader — the first section of the document. When its
-              greetings finish, the page hand-scrolls down into the site
-              (like scrolling between two sections). Only on initial load. */}
-          <Preloader />
+          {/* NOTE: the word preloader is intentionally NOT here — it only
+              plays on the homepage, so navigating between pages never shows
+              it again. Rendered inside app/page.js. */}
           <CartProvider>
             {/* Global progressive blur — blurs content scrolling past the
                 top/bottom of the viewport on every page, footer included.
@@ -52,9 +57,7 @@ export default function RootLayout({ children }) {
               blurAmount="3px"
               backgroundColor="transparent"
             />
-            <Navbar />
-            {children}
-            <Footer />
+            <Chrome>{children}</Chrome>
             <CartDrawer />
           </CartProvider>
         </LenisProvider>

@@ -8,6 +8,7 @@ import { Search, ShoppingBag, X, ChevronDown, ArrowLeft, ArrowRight, Menu } from
 import { collectionGroups, collectionCopy, collectionImages } from '@/data/collections';
 import { useCart } from '@/components/cart/CartContext';
 import SearchOverlay from '@/components/search/SearchOverlay';
+import { usePathname } from 'next/navigation';
 import { onPreloaderExit } from '@/lib/preloaderBus';
 
 const navLinks = [
@@ -51,14 +52,25 @@ export default function Navbar() {
   };
 
   useEffect(() => () => clearTimeout(closeTimer.current), []);
+  const pathname = usePathname();
+  // Hidden only while the homepage preloader holds the screen. The preloader
+  // lives on the home page alone, so anywhere else the navbar must not wait
+  // for an exit signal that never comes — the effect below reveals it as soon
+  // as the pathname is known (usePathname can be null during SSR).
   const [preloading, setPreloading] = useState(true);
   const [is404, setIs404] = useState(false);
   const { count, setIsOpen } = useCart();
   const lenis = useLenis();
 
-  // Hidden while the preloader section holds the screen; fades in as soon
-  // as the page starts hand-scrolling down into the site.
+  // Hidden while the homepage preloader section holds the screen; fades in
+  // as soon as the page starts hand-scrolling down into the site.
   useEffect(() => onPreloaderExit(() => setPreloading(false)), []);
+
+  // On any page except the home page there is no preloader — reveal the
+  // navbar right away instead of waiting for an exit signal that won't fire.
+  useEffect(() => {
+    if (pathname && pathname !== '/') setPreloading(false);
+  }, [pathname]);
 
   // 404 — the not-found page tags <body> with `route-notfound`. The navbar
   // stays hidden there (its inline <style> also hides it before hydration).

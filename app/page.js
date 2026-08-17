@@ -1,3 +1,4 @@
+import Preloader from '@/components/preloader/Preloader';
 import Hero from '@/components/hero/Hero';
 import BannerSection from '@/components/banner/BannerSection';
 import MorphSlider from '@/components/effects/MorphSlider';
@@ -77,6 +78,10 @@ export default function HomePage() {
 
   return (
     <main>
+      {/* Word preloader — plays only on the homepage. When its greetings
+          finish, the page hand-scrolls down into the hero. Never shows
+          again on subsequent navigations. */}
+      <Preloader />
       <Hero />
       <BannerSection />
 

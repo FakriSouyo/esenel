@@ -228,6 +228,8 @@ const ORDER = ['small', 'medium', 'large', 'extra-large', 'vase', 'flower-board'
 
 const seenSlugs = new Set();
 
+import { storageUrl } from '@/lib/supabase';
+
 export const products = ORDER.flatMap((slug) => {
   const cat = CATALOG[slug];
   const comps = COMPOSITIONS[slug];
@@ -242,8 +244,8 @@ export const products = ORDER.flatMap((slug) => {
       category: slug,
       subtitle: cat.subtitle,
       price,
-      image: `/katalog_esenel/${cat.folder}/${file}.webp`,
-      gallery: [`/katalog_esenel/${cat.folder}/${file}.webp`],
+      image: storageUrl(`/katalog_esenel/${cat.folder}/${file}.webp`),
+      gallery: [storageUrl(`/katalog_esenel/${cat.folder}/${file}.webp`)],
       composition: comps[i % comps.length],
       featured: FEATURED.has(file),
       isNew: IS_NEW.has(file),

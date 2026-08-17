@@ -66,6 +66,47 @@ body.route-notfound .footer-root {
   border-radius: 999px;
 }
 
+/* Desktop datepicker (react-day-picker 8.x) — palette matched to ESENEL.
+   The library ships a style.css driven by CSS variables, so only the
+   variables (plus a couple of details) need overriding here.
+   NOTE: the `esenel-datepicker` class is applied directly ON the `.rdp`
+   root element, so the root selector is `.esenel-datepicker.rdp` (a plain
+   `.esenel-datepicker .rdp` would never match and the default blue accent
+   would show). */
+.esenel-datepicker.rdp {
+  --rdp-accent-color: #71876a; /* grass — hijau tua */
+  --rdp-background-color: #ded4c2; /* sand */
+  --rdp-outline: #20221e;
+  --rdp-outline-selected: #20221e;
+  --rdp-selected-color: #f8f9f5; /* cloud */
+  --rdp-cell-size: 38px;
+  --rdp-caption-font-size: 0.85rem;
+  font-family: inherit;
+}
+.esenel-datepicker .rdp-caption {
+  color: #20221e;
+}
+.esenel-datepicker .rdp-head_cell {
+  color: rgba(32, 34, 30, 0.45);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.esenel-datepicker .rdp-day_today:not(.rdp-day_selected) {
+  border: 1px solid rgba(32, 34, 30, 0.35);
+  border-radius: 9999px;
+}
+.esenel-datepicker .rdp-button:hover:not([disabled]) {
+  background-color: #ded4c2;
+  color: #20221e;
+}
+.esenel-datepicker .rdp-day_selected {
+  border-radius: 9999px;
+  background-color: #71876a; /* grass — hijau tua */
+  color: #f8f9f5;
+}
+
 .container-esenel {
   width: 100%;
   max-width: 1400px;

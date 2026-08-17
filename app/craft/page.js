@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { Sprout, ArrowRight } from 'lucide-react';
 import CraftBuilder from '@/components/craft/CraftBuilder';
 
 export const metadata = { title: 'Craft — ESENEL' };
@@ -42,6 +44,40 @@ export default function CraftPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="bg-cloud pt-16 md:pt-24">
+        <div className="container-esenel">
+          {/* Small personalisation banner — “buat bunga dari namamu” */}
+          <Link
+            href="/craft/name"
+            className="group relative block overflow-hidden rounded-3xl border border-sand bg-[#23301F] px-6 py-7 text-cloud transition-shadow hover:shadow-[0_18px_44px_-18px_rgba(32,34,30,0.45)] md:px-9 md:py-8"
+          >
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_120%_at_88%_0%,rgba(182,197,168,0.28),transparent_65%)]" />
+            <div className="relative z-10 flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-meadow/35 bg-meadow/10">
+                  <Sprout size={19} className="text-meadow" />
+                </span>
+                <div>
+                  <p className="text-[11px] tracking-[0.2em] font-medium text-meadow/70">
+                    PERSONAL
+                  </p>
+                  <p className="mt-1.5 font-display text-xl leading-tight md:text-2xl">
+                    Buat bunga dari namamu.
+                  </p>
+                  <p className="mt-1 max-w-md text-[13px] leading-relaxed text-cloud/55">
+                    Ketik satu nama — hurufnya kami ubah jadi rangkaian bunga untuk orang itu.
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex shrink-0 items-center gap-2 rounded-pill bg-cloud px-6 py-3.5 text-[12px] font-medium tracking-nav text-[#23301F] transition-transform duration-300 group-hover:translate-x-0.5">
+                MULAI DARI NAMAMU
+                <ArrowRight size={14} />
+              </span>
+            </div>
+          </Link>
         </div>
       </section>
 

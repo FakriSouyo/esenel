@@ -25,7 +25,9 @@ export function CartProvider({ children }) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items, hydrated]);
 
-  const addItem = useCallback((item) => {
+  /** Tambah item ke cart. `{ silent: true }` menambah tanpa membuka drawer
+   *  — dipakai tombol CHECKOUT yang langsung pindah ke halaman checkout. */
+  const addItem = useCallback((item, opts) => {
     setItems((prev) => {
       const existing = prev.find((p) => p.id === item.id);
       if (existing) {
@@ -35,7 +37,7 @@ export function CartProvider({ children }) {
       }
       return [...prev, { ...item, quantity: item.quantity || 1 }];
     });
-    setIsOpen(true);
+    if (!opts?.silent) setIsOpen(true);
   }, []);
 
   const removeItem = useCallback((id) => {
@@ -50,12 +52,17 @@ export function CartProvider({ children }) {
     );
   }, []);
 
+  const clear = useCallback(() => {
+    setItems([]);
+    setIsOpen(false);
+  }, []);
+
   const count = items.reduce((sum, i) => sum + i.quantity, 0);
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
   return (
     <CartContext.Provider
-      value={{ items, addItem, removeItem, updateQuantity, count, subtotal, isOpen, setIsOpen }}
+      value={{ items, addItem, removeItem, updateQuantity, clear, count, subtotal, isOpen, setIsOpen }}
     >
       {children}
     </CartContext.Provider>

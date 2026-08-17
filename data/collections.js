@@ -27,15 +27,18 @@ export const collectionGroups = [
   },
 ];
 
-// Hero photo for each collection — real catalog shots from public/katalog_esenel.
+import { storageUrl } from '@/lib/supabase';
+
+// Hero photo for each collection — real catalog shots from public/katalog_esenel,
+// served from Supabase Storage.
 export const collectionImages = {
-  small: '/katalog_esenel/Small Bouquet/alba.webp',
-  medium: '/katalog_esenel/Medium Bouquet/bali.webp',
-  large: '/katalog_esenel/Large Bouquet/amsterdam.webp',
-  'extra-large': '/katalog_esenel/Extra Large Bouquet/venice.webp',
-  vase: '/katalog_esenel/Vase/bellagio.webp',
-  'flower-board': '/katalog_esenel/Papan Bunga/satu.webp',
-  custom: '/katalog_esenel/Custom Bouquet/customgift.webp',
+  small: storageUrl('/katalog_esenel/Small Bouquet/alba.webp'),
+  medium: storageUrl('/katalog_esenel/Medium Bouquet/bali.webp'),
+  large: storageUrl('/katalog_esenel/Large Bouquet/amsterdam.webp'),
+  'extra-large': storageUrl('/katalog_esenel/Extra Large Bouquet/venice.webp'),
+  vase: storageUrl('/katalog_esenel/Vase/bellagio.webp'),
+  'flower-board': storageUrl('/katalog_esenel/Papan Bunga/satu.webp'),
+  custom: storageUrl('/katalog_esenel/Custom Bouquet/customgift.webp'),
 };
 
 export const featuredLinks = [

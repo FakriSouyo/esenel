@@ -1,20 +1,30 @@
 'use client';
 
 import { useState } from 'react';
+import { subscribeNewsletter } from '@/lib/supabase';
 
 export default function NewsletterForm() {
   const [email, setEmail] = useState('');
-  const [done, setDone] = useState(false);
+  const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'done' | 'error'
 
   return (
     <form
       className="flex flex-col gap-3 sm:flex-row"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
-        if (email.trim()) setDone(true);
+        const value = email.trim();
+        if (!value || status === 'loading') return;
+        setStatus('loading');
+        try {
+          await subscribeNewsletter(value);
+          setStatus('done');
+        } catch (err) {
+          console.error('Newsletter subscribe failed:', err);
+          setStatus('error');
+        }
       }}
     >
-      {done ? (
+      {status === 'done' ? (
         <p className="flex h-[52px] items-center rounded-pill border border-cloud/40 px-6 text-sm text-cloud">
           You&rsquo;re on the list — see you next month. ✿
         </p>
@@ -35,11 +45,17 @@ export default function NewsletterForm() {
           />
           <button
             type="submit"
-            className="h-14 w-full shrink-0 rounded-pill bg-cloud px-8 text-[13px] font-medium tracking-nav text-ink transition-colors hover:bg-white sm:h-[52px] sm:w-auto"
+            disabled={status === 'loading'}
+            className="h-14 w-full shrink-0 rounded-pill bg-cloud px-8 text-[13px] font-medium tracking-nav text-ink transition-colors hover:bg-white disabled:opacity-60 sm:h-[52px] sm:w-auto"
           >
-            SUBSCRIBE
+            {status === 'loading' ? 'SIGNING UP…' : 'SUBSCRIBE'}
           </button>
         </>
+      )}
+      {status === 'error' && (
+        <p className="w-full text-sm text-cloud/70">
+          Something went wrong — please try again.
+        </p>
       )}
     </form>
   );
