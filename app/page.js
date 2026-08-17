@@ -1,8 +1,6 @@
+import dynamic from 'next/dynamic';
 import Preloader from '@/components/preloader/Preloader';
 import Hero from '@/components/hero/Hero';
-import BannerSection from '@/components/banner/BannerSection';
-import MorphSlider from '@/components/effects/MorphSlider';
-import MoltenMetal from '@/components/effects/MoltenMetal';
 import SmartVideo from '@/components/effects/SmartVideo';
 import DeferredMount from '@/components/effects/DeferredMount';
 import GradualBlur from '@/components/effects/GradualBlur';
@@ -11,8 +9,22 @@ import CoverflowCarousel from '@/components/carousel/CoverflowCarousel';
 import AnimatedList from '@/components/carousel/AnimatedList';
 import BouncyAccordion from '@/components/faq/BouncyAccordion';
 import FromTheGarden from '@/components/editorial/FromTheGarden';
+
+// WebGL berat (three.js / ogl / gsap) di-split jadi chunk terpisah dan baru
+// diunduh saat mendekati viewport — tidak ikut di bundle awal homepage.
+// Ukuran: PixelSnow ~= three.js, MorphSlider/MoltenMetal ~= ogl + gsap.
+const BannerSection = dynamic(
+  () => import('@/components/banner/BannerSection'),
+  { ssr: false }
+);
+const MorphSlider = dynamic(() => import('@/components/effects/MorphSlider'), {
+  ssr: false,
+});
+const MoltenMetal = dynamic(() => import('@/components/effects/MoltenMetal'), {
+  ssr: false,
+});
 import { getFeaturedProducts } from '@/data/products';
-import { collectionCopy } from '@/data/collections';
+import { collectionCopy, collectionImages } from '@/data/collections';
 import { formatIDR } from '@/lib/format';
 import { Truck, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
@@ -58,16 +70,19 @@ const deliverySteps = [
   },
 ];
 
-// All flower cut-outs from public/flowerstrail — the cursor trail cycles
-// through every one of them as the mouse moves across the journal section.
+// All flower cut-outs from public/flowerstrail (WebP, ~1/8 the size of the
+// original PNGs) — the cursor trail cycles through every one of them as the
+// mouse moves across the journal section.
 const journalTrailImages = Array.from(
   { length: 10 },
-  (_, i) => `/flowerstrail/flower${i + 1}.png`
+  (_, i) => `/flowerstrail/flower${i + 1}.webp`
 );
 
+// Real catalog shots served from Supabase Storage — the old `/${slug}.jpg`
+// files never existed in public/, so every slide 500'd on load.
 const collectionSlides = Object.entries(collectionCopy).map(([slug, copy]) => {
   return {
-    image: `/${slug}.jpg`,
+    image: collectionImages[slug] || `/${slug}.jpg`,
     caption: copy.title,
     slug,
   };
@@ -83,7 +98,11 @@ export default function HomePage() {
           again on subsequent navigations. */}
       <Preloader />
       <Hero />
-      <BannerSection />
+      {/* BannerSection berisi PixelSnow (three.js) — mount-nya ditunda sampai
+          dekat viewport supaya bundle awal tidak men-download three.js. */}
+      <DeferredMount rootMargin="600px 0px" className="h-[280px] md:h-[340px]">
+        <BannerSection />
+      </DeferredMount>
 
       {/* 02 Featured bouquets — coverflow */}
       <section className="bg-white py-20 md:py-28">

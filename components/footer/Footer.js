@@ -109,7 +109,7 @@ export default function Footer() {
       <div className="pointer-events-none relative z-0 select-none">
         <div className="relative h-[220px] sm:h-[280px] md:h-[330px] lg:h-[380px]">
           <Image
-            src="/footer.png"
+            src="/footer.webp"
             alt=""
             fill
             sizes="100vw"

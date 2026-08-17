@@ -5,10 +5,12 @@ import { useLenis } from 'lenis/react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { RotateCcw, ShoppingBag } from 'lucide-react';
+import { Calculator, RotateCcw, ShoppingBag } from 'lucide-react';
 import { products } from '@/data/products';
 import { normalizeName } from '@/lib/nameNormalize';
+import { estimateBouquetPrice } from '@/lib/flowerPrices';
 import ProductCard from '@/components/products/ProductCard';
+import FlowerPriceList from '@/components/craft/FlowerPriceList';
 
 /** Kunci sessionStorage untuk buket nama yang diteruskan langsung ke checkout
  *  (TIDAK masuk cart). Dibaca di app/checkout/page.js dan dibersihkan setelah
@@ -16,6 +18,7 @@ import ProductCard from '@/components/products/ProductCard';
 const DIRECT_ITEM_KEY = 'esenel.directItem.v1';
 import ScrambleText, { SCRAMBLE_MS } from '@/components/craft/ScrambleText';
 import GeneratedImage from '@/components/craft/GeneratedImage';
+import ShareResultButtons from '@/components/craft/ShareResult';
 
 const EASE = [0.16, 1, 0.3, 1];
 
@@ -136,10 +139,49 @@ export default function NameStory({ story, onRestart }) {
   const [genImgLoaded, setGenImgLoaded] = useState(false);
   const locked = genStatus === 'queued' || genStatus === 'generating' || genStatus === 'refining';
 
+  // CEK HARGA: rincian harga bunga muncul dulu, CHECKOUT baru muncul setelahnya.
+  const [priceRevealed, setPriceRevealed] = useState(false);
+  const [priceOpen, setPriceOpen] = useState(true);
+
   // Section yang sudah benar-benar tiba (scroll selesai). Scramble & generate
   // menunggu ini supaya animasinya terlihat saat halaman sampai, bukan
   // sudah selesai duluan sebelum user sempat melihat.
   const [arrived, setArrived] = useState(null);
+
+  // Deteksi kedatangan section lewat IntersectionObserver (bukan estimasi
+  // timer): reveal teks/bunga + timer advance baru mulai SETELAH section
+  // benar-benar terlihat di layar. Kalau teksnya panjang, durasinya ikut
+  // panjang — jadi tidak pernah terpotong saat scroll belum sampai.
+  const [inView, setInView] = useState({});
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      (entries) => {
+        setInView((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          entries.forEach((e) => {
+            const idx = Number(e.target.dataset.sidx);
+            if (!Number.isFinite(idx)) return;
+            if (next[idx] !== e.isIntersecting) {
+              next[idx] = e.isIntersecting;
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      },
+      // trigger di 75% atas viewport — cocok dengan lenis.scrollTo(offset:-40)
+      { rootMargin: '0px 0px -25% 0px', threshold: 0 }
+    );
+    [0, 1, 2].forEach((i) => {
+      const el = refs.current[i];
+      if (el) {
+        el.dataset.sidx = String(i);
+        obs.observe(el);
+      }
+    });
+    return () => obs.disconnect();
+  }, []);
 
   // Auto-scroll halus ke section berikutnya (lewat Lenis supaya tidak
   // bertabrakan dengan smooth scroll global) — pelan & lama.
@@ -177,17 +219,21 @@ export default function NameStory({ story, onRestart }) {
     return () => clearTimeout(t);
   }, [active, FINAL]);
 
-  // Section teks (0-1) maju otomatis setelah animasinya selesai.
+  // Section teks (0-1) maju otomatis SETELAH animasinya selesai. Timer mulai
+  // hanya saat section sudah benar-benar terlihat (inView) — durasinya
+  // words × WORD_MS + SECTION_HOLD, jadi teks panjang diberi waktu baca
+  // yang proporsional dan tidak pernah kepotong saat scroll belum sampai.
   useEffect(() => {
     if (active >= textSections.length || active >= 2) return;
     const s = textSections[active];
     if (!s?.text) return;
+    if (active > 0 && !inView[active]) return; // tunggu scroll tiba dulu
     const t = setTimeout(
       () => handleDone(),
       s.text.split(' ').length * WORD_MS + SECTION_HOLD
     );
     return () => clearTimeout(t);
-  }, [active, textSections, handleDone]);
+  }, [active, textSections, inView, handleDone]);
 
   // Section nama buket (3): tunggu scroll tiba, baru scramble dimulai dan
   // setelah settle lalu pindah ke generate.
@@ -285,13 +331,16 @@ export default function NameStory({ story, onRestart }) {
 
   const handleCheckout = () => {
     const ref = similar[0];
+    // Harga buket dihitung dari daftar bunga (harga per tangkai Indonesia)
+    // + kertas/jasa rangkai — bukan harga produk katalog.
+    const price = estimateBouquetPrice(story);
     // Buket hasil generate nama TIDAK masuk cart — langsung diteruskan ke
     // halaman checkout lewat sessionStorage (hilang saat tab ditutup).
     const item = {
       id: `nama-buket-${nameKey}`,
       name: story.namaBuket || story.nama,
       subtitle: `Bouquet personal untuk ${story.nama}`,
-      price: ref?.price ?? 250000,
+      price,
       image: imageUrl || ref?.image || null,
       quantity: 1,
       direct: true,
@@ -310,32 +359,41 @@ export default function NameStory({ story, onRestart }) {
 
   return (
     <main className="bg-[#F8F9F5] text-ink">
-      {/* 0-1: teks cerita */}
+      {/* 0-1: teks cerita — items-start biar teks panjang mulai dari atas
+          (dengan items-center baris atas malah keluar dari viewport di
+          mobile). Reveal baru jalan saat section benar-benar terlihat. */}
       {textSections.slice(0, 2).map((s, i) => {
         const isActive = i === active;
         const isPast = i < active;
         const dim = !isActive && !isPast;
+        const revealed = i === 0 || inView[i];
         return (
-          <section key={s.key} ref={setRef(i)} className="flex min-h-screen items-center px-6 md:px-12">
+          <section key={s.key} ref={setRef(i)} className="flex min-h-screen items-start px-6 pt-[16vh] pb-24 md:px-12">
             <div
-              className={`mx-auto w-full max-w-3xl py-24 transition-opacity duration-700 ${
+              className={`mx-auto w-full max-w-3xl transition-opacity duration-700 ${
                 dim ? 'opacity-25' : 'opacity-100'
               }`}
             >
-              <BlurWords text={s.text} active={isActive} />
+              <BlurWords text={s.text} active={isActive && revealed} />
             </div>
           </section>
         );
       })}
 
-      {/* 2: bunga yang cocok (6-8) — reveal pelan biar blur terlihat */}
-      <section ref={setRef(2)} className="flex min-h-screen items-center px-6 md:px-12">
+      {/* 2: bunga yang cocok (6-8) — reveal pelan biar blur terlihat.
+          Timer maju baru mulai saat section tiba (inView), jadi daftar
+          bunga panjang tidak kepotong. items-start biar item atas terbaca. */}
+      <section ref={setRef(2)} className="flex min-h-screen items-start px-6 pt-[16vh] pb-24 md:px-12">
         <div
-          className={`mx-auto w-full max-w-3xl py-24 transition-opacity duration-700 ${
+          className={`mx-auto w-full max-w-3xl transition-opacity duration-700 ${
             active === 2 ? 'opacity-100' : active < 2 ? 'opacity-0' : 'opacity-25'
           }`}
         >
-          <SectionItems items={textSections[2].items} active={active === 2} onDone={handleDone} />
+          <SectionItems
+            items={textSections[2].items}
+            active={active === 2 && inView[2]}
+            onDone={handleDone}
+          />
         </div>
       </section>
 
@@ -439,21 +497,48 @@ export default function NameStory({ story, onRestart }) {
             )}
           </div>
 
-          <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={handleCheckout}
-              className="inline-flex items-center gap-2 rounded-pill bg-ink px-9 py-4 text-[13px] font-medium tracking-nav text-cloud transition-colors hover:bg-ink/90"
-            >
-              <ShoppingBag size={15} />
-              CHECKOUT
-            </button>
+          {/* CEK HARGA → rincian harga bunga (animasi) → baru CHECKOUT muncul */}
+          <div className="mt-6 flex w-full flex-col items-center">
+            {!priceRevealed ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPriceRevealed(true);
+                  setPriceOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-pill bg-ink px-7 py-3.5 text-[12px] font-medium tracking-nav text-cloud transition-colors hover:bg-ink/90"
+              >
+                <Calculator size={14} />
+                CEK HARGA BUKET
+              </button>
+            ) : (
+              <FlowerPriceList story={story} open={priceOpen} onOpenChange={setPriceOpen} />
+            )}
+          </div>
+
+          {/* Tombol kecil — muat sejajar di satu baris */}
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            {priceRevealed && (
+              <button
+                type="button"
+                onClick={handleCheckout}
+                className="inline-flex items-center gap-1.5 rounded-pill bg-ink px-4 py-2 text-[11px] font-medium tracking-nav text-cloud transition-colors hover:bg-ink/90"
+              >
+                <ShoppingBag size={13} />
+                CHECKOUT
+              </button>
+            )}
+            <ShareResultButtons
+              story={story}
+              imageUrl={imageUrl}
+              fallbackImage={similar[0]?.image}
+            />
             <button
               type="button"
               onClick={onRestart}
-              className="inline-flex items-center gap-2 rounded-pill border border-ink/20 px-7 py-4 text-[13px] font-medium tracking-nav text-ink/70 transition-colors hover:border-ink/45 hover:text-ink"
+              className="inline-flex items-center gap-1.5 rounded-pill border border-ink/20 px-4 py-2 text-[11px] font-medium tracking-nav text-ink/70 transition-colors hover:border-ink/45 hover:text-ink"
             >
-              <RotateCcw size={14} />
+              <RotateCcw size={12} />
               TULIS NAMA LAIN
             </button>
           </div>

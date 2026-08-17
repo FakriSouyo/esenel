@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLenis } from "lenis/react";
 import { firePreloaderExit } from "@/lib/preloaderBus";
 
@@ -64,6 +64,18 @@ export default function Preloader() {
     lenisRef.current = lenis;
   }, [lenis]);
 
+  // When the preloader unmounts, the document loses its 100svh first
+  // section. Snap the scroll back to the top in the SAME layout pass (before
+  // paint) so the hero is already in place when the frame renders — without
+  // this, the unmount paints one frame where the page has collapsed and the
+  // hero has jumped down, which Chrome records as a large layout shift
+  // (CLS ~0.67 in Lighthouse).
+  useLayoutEffect(() => {
+    if (!removed || notFound) return;
+    window.scrollTo({ top: 0, behavior: "auto" });
+    lenisRef.current?.scrollTo(0, { immediate: true });
+  }, [removed, notFound]);
+
   useEffect(() => {
     // 404 — no preloader at all. The not-found page tags <body> with
     // `route-notfound` in a layout effect, so the class is already present
@@ -71,6 +83,26 @@ export default function Preloader() {
     // (the navbar) proceed so it doesn't stay hidden after leaving the page.
     if (isNotFoundPage()) {
       setNotFound(true);
+      if (!exitFiredRef.current) {
+        exitFiredRef.current = true;
+        firePreloaderExit();
+      }
+      return;
+    }
+
+    // Pull-to-refresh (FlowerPullToRefresh) memuat ulang halaman — lewati
+    // animasi kata supaya preloader TIDAK muncul lagi saat user menarik
+    // untuk refresh. Flag dihapus setelah dibaca, jadi kunjungan berikutnya
+    // (klik link / buka tab baru) tetap memutar preloader normal.
+    let ptrReload = false;
+    try {
+      ptrReload = sessionStorage.getItem("esenel.ptr") === "1";
+      if (ptrReload) sessionStorage.removeItem("esenel.ptr");
+    } catch {
+      // storage tidak tersedia — abaikan, preloader tetap normal
+    }
+    if (ptrReload) {
+      setRemoved(true);
       if (!exitFiredRef.current) {
         exitFiredRef.current = true;
         firePreloaderExit();
@@ -120,14 +152,11 @@ export default function Preloader() {
         if (done) return;
         done = true;
         clearInterval(watchdog);
-        setRemoved(true);
         // The section leaves the document, so the hero becomes the first
-        // section — land back at the top after React commits the removal
-        // (rAF runs after the commit, before the next paint).
-        requestAnimationFrame(() => {
-          window.scrollTo({ top: 0, behavior: "auto" });
-          lenisRef.current?.scrollTo(0, { immediate: true });
-        });
+        // section. The scroll-back-to-top happens synchronously in a layout
+        // effect (see above) — BEFORE the unmount frame paints — so the hero
+        // is in place with no intermediate collapsed frame (no CLS).
+        setRemoved(true);
       };
 
       if (lenisRef.current) {

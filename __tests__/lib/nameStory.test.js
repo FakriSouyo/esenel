@@ -7,8 +7,10 @@ import {
 import { getDummyStory } from '@/lib/nameStoryDummy';
 import {
   buildNameImageUrl,
+  CLOUDFLARE_WORKER_ENDPOINT,
   enforceImagePrompt,
   flowerEn,
+  generateWithCloudflare,
   generateWithGemini,
   GEMINI_IMAGE_MODEL_DEFAULT,
   imageHasLivingBeing,
@@ -193,6 +195,63 @@ describe('nameStoryImage', () => {
       await expect(generateWithGemini('sebuah buket')).resolves.toBeNull();
     } finally {
       if (key) process.env.GEMINI_API_KEY = key;
+    }
+  });
+
+  it('exposes the Cloudflare worker endpoint and skips generation without a key', async () => {
+    expect(CLOUDFLARE_WORKER_ENDPOINT).toContain('esenel.fakritrk.workers.dev');
+    const key = process.env.CLOUDFLARE_WORKER_API_KEY;
+    delete process.env.CLOUDFLARE_WORKER_API_KEY;
+    try {
+      await expect(generateWithCloudflare('sebuah buket')).resolves.toBeNull();
+    } finally {
+      if (key) process.env.CLOUDFLARE_WORKER_API_KEY = key;
+    }
+  });
+
+  it('posts to the worker with bearer auth and parses a raw image response', async () => {
+    const key = process.env.CLOUDFLARE_WORKER_API_KEY;
+    process.env.CLOUDFLARE_WORKER_API_KEY = 'test-worker-key';
+    const calls = [];
+    const origFetch = global.fetch;
+    global.fetch = async (url, opts) => {
+      calls.push({ url, opts });
+      return new Response(new Uint8Array([137, 80, 78, 71]), {
+        headers: { 'content-type': 'image/png' },
+      });
+    };
+    try {
+      const out = await generateWithCloudflare('buket pastel');
+      expect(out.contentType).toBe('image/png');
+      expect(Buffer.from(out.buffer).length).toBe(4);
+      expect(String(calls[0].url)).toContain('esenel.fakritrk.workers.dev');
+      expect(calls[0].opts.headers.Authorization).toBe('Bearer test-worker-key');
+      expect(calls[0].opts.headers['Content-Type']).toBe('application/json');
+      expect(JSON.parse(calls[0].opts.body).prompt).toBe('buket pastel');
+    } finally {
+      global.fetch = origFetch;
+      if (key) process.env.CLOUDFLARE_WORKER_API_KEY = key;
+      else delete process.env.CLOUDFLARE_WORKER_API_KEY;
+    }
+  });
+
+  it('parses a JSON base64 response from the worker', async () => {
+    const key = process.env.CLOUDFLARE_WORKER_API_KEY;
+    process.env.CLOUDFLARE_WORKER_API_KEY = 'test-worker-key';
+    const origFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(
+        JSON.stringify({ data: Buffer.from([1, 2, 3]).toString('base64'), content_type: 'image/jpeg' }),
+        { headers: { 'content-type': 'application/json' } }
+      );
+    try {
+      const out = await generateWithCloudflare('buket');
+      expect(out.contentType).toBe('image/jpeg');
+      expect(Buffer.from(out.buffer)).toEqual(Buffer.from([1, 2, 3]));
+    } finally {
+      global.fetch = origFetch;
+      if (key) process.env.CLOUDFLARE_WORKER_API_KEY = key;
+      else delete process.env.CLOUDFLARE_WORKER_API_KEY;
     }
   });
 

@@ -1,13 +1,19 @@
 /**
  * POST /api/name-image  { nameKey, prompt }
  *
- * Gambar buket untuk nama:
+ * Gambar buket untuk nama (urutan provider):
  *   1. Cek apakah <nameKey>.jpg/.png sudah ada di bucket name-bouquets
  *      (nama yang sama = gambar yang sama, langsung tarik tanpa generate ulang).
- *   2. Kalau belum, generate lewat Google Gemini (Interactions API,
- *      GEMINI_API_KEY di .env.local) — hasilnya di-upload ke Storage.
- *   3. Kalau tidak ada key / Gemini gagal, fallback ke pollinations.ai (free):
+ *   2. Generate lewat Cloudflare Worker Image Generation (UTAMA,
+ *      CLOUDFLARE_WORKER_API_KEY di .env) — POST { prompt } ke endpoint
+ *      worker user. Hasilnya di-upload ke Storage.
+ *   3. Kalau Cloudflare kosong / gagal, fallback pollinations.ai (free):
  *      GET https://image.pollinations.ai/prompt/{prompt}?seed=<deterministik>&model=flux
+ *      dengan pengulangan anti-makhluk-hidup via Gemini vision.
+ *
+ * Gemini TIDAK dipakai untuk generate gambar lagi (kuota gambar sering 0) —
+ * perannya sekarang hanya "text": memverifikasi hasil pollinations lewat
+ * model teks-gambar (imageHasLivingBeing) sebelum disimpan.
  *
  * Generate bisa makan waktu puluhan detik pada permintaan pertama — route ini
  * sengaja punya maxDuration besar (di Vercel hobby maks 60s, kalau lewat batas
@@ -17,7 +23,7 @@ import { NextResponse } from 'next/server';
 import { normalizeName } from '@/lib/nameNormalize';
 import {
   buildNameImageUrl,
-  generateWithGemini,
+  generateWithCloudflare,
   imageHasLivingBeing,
   seedFromKey,
 } from '@/lib/nameStoryImage';
@@ -41,14 +47,14 @@ export async function POST(req) {
   const existing = await findNameImage(nameKey);
   if (existing) return NextResponse.json({ url: existing, cached: true });
 
-  // 2) Gemini dulu (kalau GEMINI_API_KEY ada).
-  const gemini = await generateWithGemini(prompt);
-  if (gemini) {
+  // 2) Cloudflare Worker dulu (kalau CLOUDFLARE_WORKER_API_KEY ada) — provider utama.
+  const cf = await generateWithCloudflare(prompt);
+  if (cf) {
     try {
-      const url = await uploadNameImage(nameKey, gemini.buffer, gemini.contentType);
-      return NextResponse.json({ url, cached: false, source: 'gemini' });
+      const url = await uploadNameImage(nameKey, cf.buffer, cf.contentType);
+      return NextResponse.json({ url, cached: false, source: 'cloudflare' });
     } catch {
-      // storage gagal — lanjut ke fallback / error
+      // storage gagal — lanjut ke Gemini / fallback
     }
   }
 

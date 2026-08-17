@@ -1,5 +1,6 @@
 import './globals.css';
 import Chrome from '@/components/Chrome';
+import FlowerPullToRefresh from '@/components/ptr/FlowerPullToRefresh';
 import LenisProvider from '@/components/LenisProvider';
 import { CartProvider } from '@/components/cart/CartContext';
 import CartDrawer from '@/components/cart/CartDrawer';
@@ -59,6 +60,10 @@ export default function RootLayout({ children }) {
             />
             <Chrome>{children}</Chrome>
             <CartDrawer />
+            {/* Custom pull-to-refresh — mobile only. Mematikan native PTR
+                browser dan memastikan preloader kata hanya muncul di awal
+                (reload dari PTR ditandai di sessionStorage). */}
+            <FlowerPullToRefresh />
           </CartProvider>
         </LenisProvider>
       </body>

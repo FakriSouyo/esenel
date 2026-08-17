@@ -1,5 +1,5 @@
-/* Fonts are loaded via <link> in app/layout.js (parallel + preconnect)
-   rather than a render-blocking @import here. */
+/* Fonts are loaded via <link> in app/layout.js (Google Fonts,
+   parallel + preconnect) rather than a render-blocking @import here. */
 
 @tailwind base;
 @tailwind components;
@@ -37,6 +37,15 @@ html.lenis body {
 body {
   background-color: #F8F9F5;
   color: #20221E;
+}
+
+/* Mobile: native pull-to-refresh browser dimatikan — digantikan custom
+   FlowerPullToRefresh (scrub video + perayaan bunga). Scroll biasa tetap
+   jalan; hanya overscroll-nya yang tidak memicu refresh bawaan. */
+@media (pointer: coarse) {
+  html {
+    overscroll-behavior-y: none;
+  }
 }
 
 /* 404 — the not-found page tags <body> with `route-notfound`; hide the
