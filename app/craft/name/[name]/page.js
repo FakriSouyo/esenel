@@ -2,18 +2,22 @@ import { notFound } from 'next/navigation';
 import { normalizeName } from '@/lib/nameNormalize';
 import { getCachedNameStory } from '@/lib/supabase';
 import { getDummyStory } from '@/lib/nameStoryDummy';
+import { finalizeNameStory } from '@/lib/nameStoryFinalize';
 import { OG_VERSION } from '@/lib/site';
 import { products } from '@/data/products';
 import NameSharePage from '@/components/craft/NameSharePage';
 
 const CATALOG_NAMES = Array.from(new Set(products.map((p) => p.name)));
 
-/** Ambil story untuk link yang dibagikan — cache Supabase dulu, fallback
- *  dummy (sama seperti alur generate biasa) supaya link selalu bisa dibuka. */
+/** Ambil story untuk link yang dibagikan — cache Supabase dulu (difinalisasi
+ *  dengan aturan terbaru supaya sama persis dengan API), fallback dummy
+ *  supaya link selalu bisa dibuka. */
 async function resolveStory(key) {
   try {
     const row = await getCachedNameStory(key);
-    if (row?.story) return row.story;
+    if (row?.story) {
+      return finalizeNameStory(row.story, row.story.nama || key, CATALOG_NAMES);
+    }
   } catch {
     // lanjut fallback dummy
   }

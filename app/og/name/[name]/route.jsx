@@ -18,6 +18,7 @@ import { ImageResponse } from 'next/og';
 import { normalizeName } from '@/lib/nameNormalize';
 import { getCachedNameStory, findNameImage } from '@/lib/supabase';
 import { getDummyStory } from '@/lib/nameStoryDummy';
+import { finalizeNameStory } from '@/lib/nameStoryFinalize';
 import { BRAND } from '@/lib/site';
 import { loadOgFonts, OgCard } from '@/lib/ogTemplate';
 import { products } from '@/data/products';
@@ -56,7 +57,11 @@ export async function GET(request, { params }) {
   let story = null;
   try {
     const row = await getCachedNameStory(key);
-    story = row?.story || null;
+    if (row?.story) {
+      // Finalisasi dengan aturan terbaru supaya nama buket di OG sama
+      // persis dengan halaman & API (nama input sama → nama buket sama).
+      story = finalizeNameStory(row.story, row.story.nama || key, CATALOG_NAMES);
+    }
   } catch {
     story = null;
   }

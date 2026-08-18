@@ -17,9 +17,8 @@ import {
   parseStoryResponse,
 } from '@/lib/nameStoryPrompt';
 import { getDummyStory } from '@/lib/nameStoryDummy';
-import { enforceImagePrompt } from '@/lib/nameStoryImage';
+import { finalizeNameStory } from '@/lib/nameStoryFinalize';
 import { ensureUniqueBouquetName, pickBouquetName } from '@/lib/bouquetNames';
-import { enrichFlowerNames } from '@/lib/flowerPoeticNames';
 import { getCachedNameStory, saveNameStoryCache } from '@/lib/supabase';
 import { products } from '@/data/products';
 
@@ -55,12 +54,15 @@ export async function POST(req) {
       Array.isArray(cs.bunga) &&
       cs.bunga.length > 0;
     if (cacheOk) {
-      // imagePrompt lama ikut diperkuat + nama buket dicek keunikan di sini,
-      // jadi story hasil cache pun tetap mengikuti aturan terbaru. Cache lama
-      // yang belum punya namaPuitis bunga ikut di-enrich dari kamus.
-      const story = enforceImagePrompt(cached.story);
-      ensureUniqueBouquetName(story, name, CATALOG_NAMES);
-      enrichFlowerNames(story);
+      // Finalisasi sama untuk semua pembaca (halaman shared, OG, API) —
+      // dan SIMPAN hasilnya kembali, supaya cache ikut konvergen dan nama
+      // buket yang sama tidak tampil beda antara API vs halaman/OG.
+      const story = finalizeNameStory(cached.story, name, CATALOG_NAMES);
+      try {
+        await saveNameStoryCache(key, name, story);
+      } catch {
+        // simpan balik gagal tidak memblokir jawaban
+      }
       return NextResponse.json({
         story,
         name: cached.name || name,
@@ -106,10 +108,9 @@ export async function POST(req) {
               exclude: [name, ...CATALOG_NAMES],
             });
           }
-          // Pastikan imagePrompt menyebut SEMUA bunga kecocokan, bukan ringkasan,
-          // dan tiap bunga punya nama puitis 1 kata (jaring pengaman AI).
-          enforceImagePrompt(story);
-          enrichFlowerNames(story);
+          // Finalisasi: imagePrompt diperkuat + tiap bunga dapat nama
+          // puitis 1 kata (jaring pengaman AI).
+          finalizeNameStory(story, name, CATALOG_NAMES);
           try {
             await saveNameStoryCache(key, name, story);
           } catch {
@@ -131,8 +132,6 @@ export async function POST(req) {
   // 3) fallback dummy (belum ada key, atau DeepSeek gagal).
   const story = getDummyStory(name, CATALOG_NAMES);
   story.nama = name;
-  ensureUniqueBouquetName(story, name, CATALOG_NAMES);
-  enforceImagePrompt(story);
-  enrichFlowerNames(story);
+  finalizeNameStory(story, name, CATALOG_NAMES);
   return NextResponse.json({ story, name, cached: false, source: 'dummy' });
 }
