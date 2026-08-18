@@ -24,12 +24,20 @@ const EASE = [0.16, 1, 0.3, 1];
 const SPRING_LAYOUT = { type: 'spring', stiffness: 360, damping: 32, mass: 0.6 };
 
 // Irama pelan & jelas — reveal blur per kata harus sempat terlihat sebelum
-// scroll pindah ke section berikutnya.
-const WORD_MS = 110; // per kata
-const SECTION_HOLD = 3000; // jeda setelah teks selesai sebelum pindah
-const SCROLL_DELAY = 1200; // jeda sebelum mulai scroll
-const SCROLL_DURATION = 3.2; // durasi scroll halus (detik)
-const NAME_REVEAL_HOLD = 2600; // jeda setelah nama settle sebelum generate
+// scroll pindah ke section berikutnya. Nilai di bawah sudah disesuaikan
+// supaya alur terasa lebih hidup: scroll ke section teks lebih cepat, teks
+// baru reveal SETELAH scroll section selesai, scroll ke daftar bunga paling
+// cepat, dan setelah reveal bunga ada jeda baca panjang.
+const WORD_MS = 90; // per kata
+const SECTION_HOLD = 2200; // jeda setelah teks selesai sebelum pindah
+const SCROLL_DELAY = 700; // jeda sebelum mulai scroll
+const SCROLL_DURATION = 2.4; // durasi scroll halus (detik)
+const NAME_REVEAL_HOLD = 2200; // jeda setelah nama settle sebelum generate
+const FLOWERS_SCROLL_DURATION = 1.6; // scroll ke daftar bunga LEBIH cepat
+const FLOWERS_HOLD_MS = 3000; // jeda baca PANJANG setelah reveal bunga
+
+/** Durasi scroll per section: daftar bunga paling cepat, sisanya standar. */
+const sectionScrollDuration = (i) => (i === 2 ? FLOWERS_SCROLL_DURATION : SCROLL_DURATION);
 
 /** Kata per kata dengan efek blur masuk (gaya magicui text-animate).
  *  `delay` = offset awal per item supaya item berurutan, bukan serentak. */
@@ -201,43 +209,9 @@ export default function NameStory({ story, onRestart }) {
     return () => clearTimeout(t);
   }, [arrived, FINAL, lenis]);
 
-  // Deteksi kedatangan section lewat IntersectionObserver (bukan estimasi
-  // timer): reveal teks/bunga + timer advance baru mulai SETELAH section
-  // benar-benar terlihat di layar. Kalau teksnya panjang, durasinya ikut
-  // panjang — jadi tidak pernah terpotong saat scroll belum sampai.
-  const [inView, setInView] = useState({});
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      (entries) => {
-        setInView((prev) => {
-          let changed = false;
-          const next = { ...prev };
-          entries.forEach((e) => {
-            const idx = Number(e.target.dataset.sidx);
-            if (!Number.isFinite(idx)) return;
-            if (next[idx] !== e.isIntersecting) {
-              next[idx] = e.isIntersecting;
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
-        });
-      },
-      // trigger di 75% atas viewport — cocok dengan lenis.scrollTo(offset:-40)
-      { rootMargin: '0px 0px -25% 0px', threshold: 0 }
-    );
-    [0, 1, 2].forEach((i) => {
-      const el = refs.current[i];
-      if (el) {
-        el.dataset.sidx = String(i);
-        obs.observe(el);
-      }
-    });
-    return () => obs.disconnect();
-  }, []);
-
   // Auto-scroll halus ke section berikutnya (lewat Lenis supaya tidak
-  // bertabrakan dengan smooth scroll global) — pelan & lama.
+  // bertabrakan dengan smooth scroll global) — scroll ke daftar bunga
+  // (section 2) paling cepat, sisanya standar.
   useEffect(() => {
     if (active === 0 || active > FINAL) return;
     const el = refs.current[active];
@@ -246,7 +220,7 @@ export default function NameStory({ story, onRestart }) {
       if (lenis) {
         lenis.scrollTo(el, {
           offset: -40,
-          duration: SCROLL_DURATION,
+          duration: sectionScrollDuration(active),
           easing: (x) => 1 - Math.pow(1 - x, 3),
         });
       } else {
@@ -261,13 +235,14 @@ export default function NameStory({ story, onRestart }) {
     [FINAL]
   );
 
-  // Tandai "tiba" setelah scroll ke section aktif selesai (SCROLL_DELAY +
-  // durasi scroll). Dipakai section nama buket & generate.
+  // Tandai "tiba" setelah scroll ke section aktif SELESAI (SCROLL_DELAY +
+  // durasi scroll per section). Reveal teks/bunga baru mulai setelah ini —
+  // jadi urutannya: scroll section dulu, baru teks reveal perlahan.
   useEffect(() => {
     if (active === 0 || active > FINAL) return;
     const t = setTimeout(
       () => setArrived(active),
-      SCROLL_DELAY + SCROLL_DURATION * 1000
+      SCROLL_DELAY + sectionScrollDuration(active) * 1000
     );
     return () => clearTimeout(t);
   }, [active, FINAL]);
@@ -275,15 +250,14 @@ export default function NameStory({ story, onRestart }) {
   // IKUTI REVEAL (streaming): selama teks / daftar bunga sedang di-reveal,
   // halaman ikut scroll pelan supaya baris yang baru muncul selalu terbaca —
   // di mobile, section yang lebih tinggi dari layar tidak lagi terpotong saat
-  // pindah ke section berikutnya. Berjalan dari posisi saat reveal mulai
-  // sampai bagian bawah section tepat saat reveal selesai (p = 1), lalu
-  // berhenti supaya jeda baca (SECTION_HOLD) bebas scroll manual.
+  // pindah ke section berikutnya. Mulai hanya SETELAH scroll section selesai
+  // (arrived) — teks baru reveal perlahan saat halaman sudah berhenti.
   // Untuk daftar bunga, lama scroll di-cap (FLOWERS_SCROLL_MS) supaya
   // halaman tidak berjalan terlalu lambat di section yang tinggi.
-  const revealVisible = active === 0 || !!inView[active];
+  const revealVisible = active === 0 || arrived === active;
   useEffect(() => {
     if (active >= textSections.length) return; // hanya section 0..2
-    if (!revealVisible) return; // tunggu section tiba sebelum mengikuti
+    if (!revealVisible) return; // tunggu scroll section selesai dulu
     const el = refs.current[active];
     if (!el) return;
     const s = textSections[active];
@@ -314,18 +288,18 @@ export default function NameStory({ story, onRestart }) {
     return () => clearInterval(timer);
   }, [active, revealVisible, textSections, lenis]);
 
-  // Section teks (0-1) maju otomatis SETELAH animasinya selesai. Timer mulai
-  // hanya saat section sudah benar-benar terlihat (inView) — durasinya
+  // Section teks (0-1) maju otomatis SETELAH reveal selesai. Timer mulai
+  // hanya setelah scroll section selesai (arrived) — durasinya
   // words × WORD_MS + SECTION_HOLD, jadi teks panjang diberi waktu baca
   // yang proporsional dan tidak pernah kepotong saat scroll belum sampai.
-  // Depends on boolean `textVisible` (bukan objek inView) supaya timer tidak
-  // ter-reset saat section LAIN masuk/keluar viewport.
-  const textVisible = active === 0 || !!inView[active];
+  // Depends on boolean `textVisible` supaya timer tidak ter-reset saat
+  // section LAIN masuk/keluar viewport.
+  const textVisible = active === 0 || arrived === active;
   useEffect(() => {
     if (active >= textSections.length || active >= 2) return;
     const s = textSections[active];
     if (!s?.text) return;
-    if (!textVisible) return; // tunggu scroll tiba dulu
+    if (!textVisible) return; // tunggu scroll section selesai dulu
     const t = setTimeout(
       () => handleDone(),
       s.text.split(' ').length * WORD_MS + SECTION_HOLD
@@ -477,17 +451,18 @@ export default function NameStory({ story, onRestart }) {
     <main className="bg-[#F8F9F5] text-ink">
       {/* 0-1: teks cerita — items-start biar teks panjang mulai dari atas
           (dengan items-center baris atas malah keluar dari viewport di
-          mobile). Reveal baru jalan saat section benar-benar terlihat. */}
+          mobile). Teks DISEMBUNYIKAN dulu selama scroll section berjalan,
+          baru muncul (blur reveal) SETELAH scroll selesai (arrived). */}
       {textSections.slice(0, 2).map((s, i) => {
         const isActive = i === active;
         const isPast = i < active;
         const dim = !isActive && !isPast;
-        const revealed = i === 0 || inView[i];
+        const revealed = i === 0 || arrived === i;
         return (
           <section key={s.key} ref={setRef(i)} className="flex min-h-screen items-start px-6 pt-[16vh] pb-24 md:px-12">
             <div
               className={`mx-auto w-full max-w-3xl transition-opacity duration-700 ${
-                dim ? 'opacity-25' : 'opacity-100'
+                dim ? 'opacity-25' : isActive && !revealed ? 'opacity-0' : 'opacity-100'
               }`}
             >
               <BlurWords text={s.text} active={isActive && revealed} />
@@ -497,8 +472,9 @@ export default function NameStory({ story, onRestart }) {
       })}
 
       {/* 2: bunga yang cocok (6-8) — reveal pelan biar blur terlihat.
-          Timer maju baru mulai saat section tiba (inView), jadi daftar
-          bunga panjang tidak kepotong. items-start biar item atas terbaca. */}
+          Timer maju baru mulai SETELAH scroll section selesai (arrived),
+          dan setelah reveal selesai ada jeda baca panjang (FLOWERS_HOLD_MS).
+          items-start biar item atas terbaca. */}
       <section ref={setRef(2)} className="flex min-h-screen items-start px-6 pt-[16vh] pb-24 md:px-12">
         <div
           className={`mx-auto w-full max-w-3xl transition-opacity duration-700 ${
@@ -507,7 +483,7 @@ export default function NameStory({ story, onRestart }) {
         >
           <SectionItems
             items={textSections[2].items}
-            active={active === 2 && inView[2]}
+            active={active === 2 && arrived === 2}
             onDone={handleDone}
           />
         </div>
@@ -748,13 +724,13 @@ export default function NameStory({ story, onRestart }) {
  *  state `visible` (bukan stagger delay statis), tiap baris memantul masuk
  *  dengan spring dan baris di bawahnya meluncur turun (layout spring) —
  *  konsisten dengan rincian harga di section selesai. */
-const MOUNT_BASE = 400; // ms sebelum baris pertama masuk
-const MOUNT_STEP = 480; // jeda antar baris (baris baru muncul satu-satu)
-const ROW_REVEAL_MS = 700; // waktu blur nama + alasan dalam satu baris setelah muncul
-const ITEM_HOLD = 150; // jeda setelah reveal terakhir sebelum pindah
-const REASON_WORD_MS = 14; // kata/detik untuk alasan (blur cepat, tidak menahan section)
-const FLOWERS_SCROLL_MS = 20000; // follow-scroll bunga sinkron penuh dengan reveal
-const FLOWERS_SECTION_MAX = 14000; // cap total durasi section bunga (ms)
+const MOUNT_BASE = 240; // ms sebelum baris pertama masuk
+const MOUNT_STEP = 360; // jeda antar baris (baris baru muncul satu-satu)
+const ROW_REVEAL_MS = 650; // waktu blur nama + alasan dalam satu baris setelah muncul
+const ITEM_HOLD = 120; // jeda setelah reveal terakhir sebelum pindah
+const REASON_WORD_MS = 12; // kata/detik untuk alasan (blur cepat, tidak menahan section)
+const FLOWERS_SCROLL_MS = 15000; // follow-scroll bunga sinkron penuh dengan reveal
+const FLOWERS_SECTION_MAX = 11500; // cap total durasi section bunga (ms)
 
 /** Durasi reveal total section bunga (ms) — dipakai timer maju SectionItems
  *  DAN follow-scroll reveal supaya keduanya selalu sinkron (scroll selesai
@@ -784,7 +760,9 @@ function SectionItems({ items, active, onDone }) {
 
   useEffect(() => {
     if (!active) return;
-    const t = setTimeout(onDone, totalMs);
+    // Jeda baca PANJANG (FLOWERS_HOLD_MS) setelah reveal selesai, supaya
+    // daftar bunga masih sempat dibaca sebelum pindah ke section berikutnya.
+    const t = setTimeout(onDone, totalMs + FLOWERS_HOLD_MS);
     return () => clearTimeout(t);
   }, [active, totalMs, onDone]);
 

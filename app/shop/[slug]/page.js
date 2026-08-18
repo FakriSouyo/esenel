@@ -5,6 +5,7 @@ import { ArrowRight, Droplets, Flower2, Ruler, Truck } from 'lucide-react';
 import { getProductBySlug, getProductsByCategory, categories, products } from '@/data/products';
 import ProductBuyBox from '@/components/products/ProductBuyBox';
 import ProductCard from '@/components/products/ProductCard';
+import { ogImage } from '@/lib/site';
 
 export function generateStaticParams() {
   return products.map((p) => ({ slug: p.slug }));
@@ -12,7 +13,16 @@ export function generateStaticParams() {
 
 export function generateMetadata({ params }) {
   const product = getProductBySlug(params.slug);
-  return { title: product ? `${product.name} — ${product.subtitle} — ESENEL` : 'ESENEL' };
+  if (!product) return { title: 'ESENEL' };
+  return {
+    title: `${product.name} — ${product.subtitle} — ESENEL`,
+    description: product.subtitle,
+    openGraph: {
+      title: `${product.name} — ESENEL`,
+      description: product.subtitle,
+      images: [ogImage('shop')],
+    },
+  };
 }
 
 export default function ProductDetailPage({ params }) {

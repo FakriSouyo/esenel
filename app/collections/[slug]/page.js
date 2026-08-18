@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { collectionCopy } from '@/data/collections';
 import { getProductsByCategory } from '@/data/products';
 import ProductCard from '@/components/products/ProductCard';
+import { ogImage } from '@/lib/site';
 
 export function generateStaticParams() {
   return Object.keys(collectionCopy).map((slug) => ({ slug }));
@@ -9,7 +10,16 @@ export function generateStaticParams() {
 
 export function generateMetadata({ params }) {
   const copy = collectionCopy[params.slug];
-  return { title: copy ? `${copy.title} — ESENEL` : 'ESENEL' };
+  if (!copy) return { title: 'ESENEL' };
+  return {
+    title: `${copy.title} — ESENEL`,
+    description: copy.tagline,
+    openGraph: {
+      title: `${copy.title} — ESENEL`,
+      description: copy.tagline,
+      images: [ogImage('shop')],
+    },
+  };
 }
 
 export default function CollectionDetailPage({ params }) {

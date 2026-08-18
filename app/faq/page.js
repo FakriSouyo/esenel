@@ -1,6 +1,15 @@
 import BouncyAccordion from '@/components/faq/BouncyAccordion';
+import { ogImage } from '@/lib/site';
 
-export const metadata = { title: 'FAQ — ESENEL' };
+export const metadata = {
+  title: 'FAQ — ESENEL',
+  description: 'Pertanyaan seputar pesanan, pengiriman, dan buket ESENEL.',
+  openGraph: {
+    title: 'FAQ — ESENEL',
+    description: 'Pertanyaan seputar pesanan, pengiriman, dan buket ESENEL.',
+    images: [ogImage('faq')],
+  },
+};
 
 const faqItems = [
   {

@@ -205,13 +205,13 @@ export default function NameBouquetPage() {
               mengisi ulang (story tetap di-fetch segar dari cache Supabase,
               bukan resume). */}
           {showHistory && history.length > 0 && (
-            <div className="ml-10 w-full lg:w-[50vw]">
+            <div className="ml-10 w-[calc(100%-2.5rem)] lg:w-[50vw]">
               <div className="pt-5">
                 <p className="text-[10px] tracking-[0.24em] font-medium uppercase text-ink/35">
                   Namamu sebelumnya
                 </p>
                 <div
-                  className="no-scrollbar -mx-1 mt-2.5 flex gap-2 overflow-x-auto px-1 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  className="no-scrollbar mt-2.5 flex gap-2 overflow-x-auto px-1 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:[mask-image:none] [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)]"
                   role="list"
                 >
                   {history.map((h) => (
@@ -225,7 +225,7 @@ export default function NameBouquetPage() {
                         setShowHistory(false);
                         inputRef.current?.focus();
                       }}
-                      className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-ink/10 px-3.5 py-1.5 font-display text-sm tracking-[-0.02em] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink"
+                      className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-ink/10 px-3 py-1.5 font-display text-[13px] tracking-[-0.02em] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink sm:px-3.5 sm:text-sm"
                     >
                       <span className="text-[10px] text-ink/25">↳</span>
                       {h}

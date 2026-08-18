@@ -1,20 +1,27 @@
 'use client';
 
 /**
- * Tombol "BAGIKAN" → dialog berisi kartu hasil (EsenelResultCard) + aksi:
- *   SHARE      — Web Share API (kirim PNG kartu ke story/media sosial),
+ * Tombol "BAGIKAN" → dialog/modal berisi kartu hasil (EsenelResultCard):
+ *   BAGIKAN    — Web Share API (kirim PNG kartu ke story/media sosial),
  *                fallback ke clipboard / unduh.
  *   UNDUH      — simpan PNG kartu ke device.
- *   SALIN LINK — salin link /craft/name/<nameKey> (OG image dinamis menampilkan
- *                nama buket hasil generate + deskripsi singkat).
+ *   SALIN LINK — salin link /craft/name/<nameKey> (OG image dinamis).
+ *
+ * Desain mengikuti pola dialog modern (shadcn/ui + animasi spring ala
+ * Aceternity): panel terpusat di tengah viewport (bukan full-screen),
+ * overlay gelap pekat + backdrop blur, panel cloud bersih dengan header /
+ * body kartu / footer aksi, masuk-keluar dengan animasi fade + zoom + spring.
+ * Kartu di dalam body di-scale otomatis terhadap ukuran area yang tersedia
+ * (diukur live via ResizeObserver) — selalu muat utuh, tanpa scroll.
  *
  * Export PNG memakai html-to-image terhadap klon kartu yang dirender lebar
  * (1080px) di luar layar — jadi hasilnya tajam meski kartu preview kecil.
- * Kalau foto buket gagal di-inline (CORS storage), export otomatis memakai
- * fallback ✿ (selalu dirender di belakang foto oleh EsenelResultCard).
+ * Foto di-inline dulu menjadi data URL sebelum export, supaya UNDUH/BAGIKAN
+ * selalu berisi gambar buket asli, bukan placeholder ✿.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { toPng } from 'html-to-image';
 import { Download, Link2, Share2, X } from 'lucide-react';
 import EsenelResultCard from '@/components/craft/EsenelResultCard';
@@ -70,9 +77,13 @@ function fileName(story) {
 
 export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) {
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(null); // 'share' | 'download' | null
   const [msg, setMsg] = useState(null);
   const exportRef = useRef(null);
+  const cardWrapRef = useRef(null);
+  const cardAreaRef = useRef(null);
+  // Ukuran natural kartu (belum di-scale) + skala agar muat di area panel.
+  const [fit, setFit] = useState(null);
 
   const shareUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
@@ -80,8 +91,9 @@ export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) 
     return `${window.location.origin}/craft/name/${encodeURIComponent(key)}`;
   }, [nameKey]);
 
-  // Escape menutup dialog; tandai <body> supaya Escape halaman (kembali ke
-  // /craft) tidak ikut jalan saat dialog terbuka.
+  // Saat dialog terbuka: tandai <body> supaya Escape halaman (kembali ke
+  // /craft) tidak ikut jalan, dan Escape menutup dialog. SCROLL TIDAK
+  // dikunci — user boleh scroll halaman di belakang (permintaan pemilik).
   useEffect(() => {
     if (!open) return;
     try {
@@ -103,6 +115,59 @@ export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) 
     };
   }, [open]);
 
+  // Ukur ukuran natural kartu + ukuran AREA kartu di dalam panel (header dan
+  // footer sudah mengurangi tingginya), lalu hitung skala — kartu selalu
+  // muat utuh di area itu, tanpa scroll dan tanpa angka ajaib.
+  useEffect(() => {
+    if (!open) return;
+    const compute = () => {
+      const area = cardAreaRef.current;
+      const wrap = cardWrapRef.current;
+      if (!area || !wrap) return;
+      const aRect = area.getBoundingClientRect();
+      const wRect = wrap.getBoundingClientRect();
+      if (!aRect.width || !aRect.height || !wRect.width || !wRect.height) return;
+      const scale = Math.min(1, aRect.width / wRect.width, aRect.height / wRect.height);
+      setFit({ scale: Math.max(0.2, scale), height: wRect.height * scale });
+    };
+    compute();
+    // font & gambar butuh waktu — hitung ulang setelah muat
+    const t1 = window.setTimeout(compute, 350);
+    const t2 = window.setTimeout(compute, 1200);
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(compute);
+    ro?.observe(cardAreaRef.current);
+    ro?.observe(cardWrapRef.current);
+    window.addEventListener('resize', compute);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      ro?.disconnect();
+      window.removeEventListener('resize', compute);
+    };
+  }, [open]);
+
+  // Foto di-inline menjadi data URL di klon export. Data URL tidak butuh
+  // CORS sama sekali, jadi toPng selalu bisa membacanya → UNDUH/BAGIKAN
+  // berisi gambar buket asli, bukan fallback ✿.
+  const inlineImage = useCallback(
+    async (node) => {
+      if (!imageSrc || imageSrc.startsWith('data:')) return;
+      const img = node.querySelector('.ec-photo-frame img');
+      if (!img) return;
+      try {
+        const res = await fetch(imageSrc, { cache: 'force-cache' });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const dataUrl = await toDataUrl(blob);
+        img.src = dataUrl;
+        await img.decode?.().catch(() => {});
+      } catch {
+        // biarkan src asli — kalau tetap gagal, fallback ✿ menangani
+      }
+    },
+    [imageSrc]
+  );
+
   const capture = useCallback(async () => {
     const container = exportRef.current;
     if (!container) throw new Error('Kartu belum siap');
@@ -111,12 +176,13 @@ export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) 
     // posisi itu ke klon SVG → isi kartu jadi 10000px di luar viewport
     // (hasil export kosong). Stage tidak punya posisi negatif.
     const node = container.querySelector('.ec-stage') || container;
+    await inlineImage(node);
     const fontEmbedCSS = await buildFontEmbedCSS();
     const opts = { pixelRatio: 1, cacheBust: true, backgroundColor: '#F8F9F5', fontEmbedCSS };
     try {
       return await toPng(node, opts);
     } catch {
-      // Foto kemungkinan gagal di-inline (CORS storage) → sembunyikan dan
+      // Masih gagal (mis. foto memang tidak bisa dimuat) → sembunyikan dan
       // pakai fallback ✿ yang sudah dirender di belakang foto.
       const img = node.querySelector('.ec-photo-frame img');
       if (img) img.style.display = 'none';
@@ -126,7 +192,7 @@ export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) 
         if (img) img.style.display = '';
       }
     }
-  }, []);
+  }, [inlineImage]);
 
   const download = (dataUrl) => {
     const a = document.createElement('a');
@@ -138,7 +204,7 @@ export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) 
   };
 
   const handleShare = useCallback(async () => {
-    setBusy(true);
+    setBusy('share');
     setMsg(null);
     try {
       const dataUrl = await capture();
@@ -165,12 +231,12 @@ export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) 
       }
       setMsg('Gagal membagikan — coba lagi.');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }, [capture, story]);
 
   const handleDownload = useCallback(async () => {
-    setBusy(true);
+    setBusy('download');
     setMsg(null);
     try {
       download(await capture());
@@ -178,7 +244,7 @@ export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) 
     } catch {
       setMsg('Gagal mengunduh — coba lagi.');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }, [capture]);
 
@@ -205,6 +271,8 @@ export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) 
     ta.remove();
   }, [shareUrl]);
 
+  const busyLabel = busy === 'share' ? 'MENYIAPKAN…' : busy === 'download' ? 'MENGUNDUH…' : null;
+
   return (
     <>
       <button
@@ -219,79 +287,121 @@ export default function ShareCardDialog({ story, imageSrc, imageAlt, nameKey }) 
         BAGIKAN
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-ink/60 p-4 backdrop-blur-sm"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Kartu buket"
-            onClick={(e) => e.stopPropagation()}
-            className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-cloud p-3 shadow-2xl"
-          >
-            {/* header */}
-            <div className="flex items-center justify-between gap-3 px-2 pb-3 pt-1">
-              <div className="min-w-0 text-left">
-                <p className="font-display text-base tracking-[-0.01em] text-ink">
-                  Kartu buketmu
-                </p>
-                <p className="text-[10px] uppercase tracking-[0.22em] text-ink/40">
-                  {story?.namaBuket || story?.nama} · ESENEL
-                </p>
+      <AnimatePresence>
+        {open && (
+          <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 sm:p-6">
+            {/* overlay — hampir opak + blur SANGAT pekat, dijamin menutup
+                penuh meski backdrop-filter tidak didukung browser */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              onClick={() => setOpen(false)}
+              className="absolute inset-0 bg-ink/95"
+              style={{
+                backdropFilter: 'blur(40px) saturate(1.2)',
+                WebkitBackdropFilter: 'blur(40px) saturate(1.2)',
+              }}
+            />
+
+            {/* panel — terpusat, fade + zoom + spring ala Aceternity */}
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Kartu buket"
+              initial={{ opacity: 0, scale: 0.95, y: 18 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: 10 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28, mass: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-ink/5 bg-cloud text-ink shadow-[0_40px_120px_-24px_rgba(0,0,0,0.65)]"
+              style={{ maxHeight: 'calc(100dvh - 40px)' }}
+            >
+              {/* header */}
+              <div className="flex items-center justify-between gap-3 border-b border-ink/10 px-5 py-4">
+                <div className="min-w-0 text-left">
+                  <p className="truncate font-display text-lg tracking-[-0.01em] text-ink">
+                    {story?.namaBuket || story?.nama}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-ink/40">
+                    Kartu buketmu · ESENEL
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Tutup"
+                  className="grid size-9 shrink-0 place-items-center rounded-full bg-ink/5 text-ink/60 transition-colors hover:bg-ink/10 hover:text-ink"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Tutup"
-                className="grid size-9 shrink-0 place-items-center rounded-full bg-ink/5 text-ink/60 transition-colors hover:bg-ink/10 hover:text-ink"
-              >
-                <X size={16} />
-              </button>
-            </div>
 
-            {/* kartu preview — bisa di-scroll kalau lebih tinggi dari dialog */}
-            <div className="no-scrollbar -mx-1 overflow-y-auto px-1 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <EsenelResultCard story={story} imageSrc={imageSrc} imageAlt={imageAlt} />
-            </div>
+              {/* body: kartu — diukur lalu di-scale agar muat utuh di area ini */}
+              <div
+                ref={cardAreaRef}
+                className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#F2EEE3] px-5 py-4"
+              >
+                <div
+                  style={fit ? { height: fit.height } : undefined}
+                  className="flex items-start justify-center"
+                >
+                  <div
+                    style={
+                      fit
+                        ? { transform: `scale(${fit.scale})`, transformOrigin: 'top center' }
+                        : undefined
+                    }
+                  >
+                    <div ref={cardWrapRef} className="w-[min(440px,78vw)]">
+                      <EsenelResultCard story={story} imageSrc={imageSrc} imageAlt={imageAlt} />
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-            {/* aksi */}
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
-              <button
-                type="button"
-                onClick={handleShare}
-                disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-pill bg-ink px-4 py-2 text-[11px] font-medium tracking-nav text-cloud transition-colors hover:bg-ink/90 disabled:opacity-50"
-              >
-                <Share2 size={13} />
-                {busy ? 'MENYIAPKAN…' : 'SHARE'}
-              </button>
-              <button
-                type="button"
-                onClick={handleDownload}
-                disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-pill border border-ink/20 px-4 py-2 text-[11px] font-medium tracking-nav text-ink/70 transition-colors hover:border-ink/45 hover:text-ink disabled:opacity-50"
-              >
-                <Download size={13} />
-                UNDUH
-              </button>
-              <button
-                type="button"
-                onClick={handleCopyLink}
-                className="inline-flex items-center gap-1.5 rounded-pill border border-ink/20 px-4 py-2 text-[11px] font-medium tracking-nav text-ink/70 transition-colors hover:border-ink/45 hover:text-ink"
-              >
-                <Link2 size={13} />
-                SALIN LINK
-              </button>
-            </div>
-            {msg && <p className="pt-2 text-center text-[11px] text-ink/55">{msg}</p>}
+              {/* footer: aksi */}
+              <div className="border-t border-ink/10 px-5 py-4">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    disabled={busy !== null}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-ink px-5 py-3 text-[12px] font-semibold tracking-nav text-cloud transition-all hover:bg-ink/90 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <Share2 size={14} />
+                    {busy === 'share' ? busyLabel : 'BAGIKAN'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    disabled={busy !== null}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-ink/20 bg-ink/5 px-5 py-3 text-[12px] font-semibold tracking-nav text-ink/80 transition-all hover:border-ink/40 hover:text-ink active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <Download size={14} />
+                    {busy === 'download' ? busyLabel : 'UNDUH'}
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium tracking-nav text-ink/50 transition-colors hover:text-ink"
+                  >
+                    <Link2 size={12} />
+                    SALIN LINK
+                  </button>
+                </div>
+                {msg && <p className="mt-2 text-center text-[11px] text-ink/55">{msg}</p>}
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* klon kartu lebar untuk export PNG — di luar layar, dirender saat
-          dialog terbuka supaya gambar siap begitu user menekan SHARE/UNDUH */}
+          dialog terbuka supaya gambar siap begitu user menekan BAGIKAN/UNDUH */}
       {open && (
         <div
           aria-hidden="true"

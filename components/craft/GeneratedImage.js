@@ -142,7 +142,6 @@ export default function GeneratedImage({
   status,
   src,
   prompt,
-  resolution = '1024 × 1024',
   aspectRatio = '1 / 1',
   onRetry,
   onMediaLoad,
@@ -189,12 +188,6 @@ export default function GeneratedImage({
           )}
 
           <DitherField status={status} reduce={reduce} />
-
-          {resolution ? (
-            <span className="absolute top-3 right-3 z-10 rounded-full bg-cloud/85 px-2 py-0.5 font-mono text-[10px] tracking-tight text-ink/70">
-              {resolution}
-            </span>
-          ) : null}
 
           {active && (
             <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-2 bg-gradient-to-t from-ink/25 to-transparent px-4 pt-10 pb-4 text-[12px] font-medium tracking-nav text-cloud">

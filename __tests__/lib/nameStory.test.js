@@ -48,7 +48,10 @@ describe('buildNamePrompt', () => {
 describe('bouquetNames', () => {
   it('picks deterministically from a poetic pool', () => {
     expect(pickBouquetName('Carin')).toBe(pickBouquetName('Carin'));
-    expect(BOUQUET_NAMES).toContain(pickBouquetName('Carin'));
+    // hasil: SATU KATA puitis
+    const name = pickBouquetName('Carin');
+    expect(name.split(/\s+/)).toHaveLength(1);
+    expect(name).toMatch(/^[A-Z][a-zāēīōū]+$/);
     expect(pickBouquetName('a')).not.toBe(pickBouquetName('b'));
   });
 
@@ -85,9 +88,13 @@ describe('bouquetNames', () => {
     // nama buket = nama input persis → diganti
     story = ensureUniqueBouquetName({ namaBuket: 'Carin' }, 'Carin', catalogs);
     expect(story.namaBuket).not.toBe('Carin');
-    // nama buket yang aman → dibiarkan
+    // nama buket dari kolam fallback (mudah dipakai ulang AI → dua orang
+    // bisa kebagian nama sama) → diganti
     story = ensureUniqueBouquetName({ namaBuket: 'Tsukiyo' }, 'Carin', catalogs);
-    expect(story.namaBuket).toBe('Tsukiyo');
+    expect(story.namaBuket).not.toBe('Tsukiyo');
+    // nama AI yang aman & unik (bukan katalog/input/kolam) → dibiarkan
+    story = ensureUniqueBouquetName({ namaBuket: 'Lumière' }, 'Carin', catalogs);
+    expect(story.namaBuket).toBe('Lumière');
   });
 });
 
@@ -326,7 +333,10 @@ describe('nameStoryImage', () => {
     const story = { imagePrompt: 'A bouquet.', bunga: [{ nama: 'Lavender', namaEn: 'purple lavender sprigs' }] };
     enforceImagePrompt(story);
     expect(story.imagePrompt).toMatch(/^A single bouquet mixing/i);
-    expect(story.imagePrompt).toMatch(/still life on a plain wooden table/i);
+    expect(story.imagePrompt).toMatch(/plain wooden table/i);
+    expect(story.imagePrompt).toMatch(/premium floral catalog/i);
+    expect(story.imagePrompt).toMatch(/kraft paper/i);
+    expect(story.imagePrompt).toMatch(/not in a vase, no glass vase/i);
   });
 
   it('enforceImagePrompt is a no-op for stories without flowers', () => {

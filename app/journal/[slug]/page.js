@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowRight, CalendarDays, Clock } from 'lucide-react';
 import { getPostBySlug, posts, journalCategories } from '@/data/journal';
+import { ogImage } from '@/lib/site';
 
 export const dynamicParams = false;
 
@@ -13,7 +14,14 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }) {
   const post = getPostBySlug(params.slug);
   if (!post) return { title: 'Journal — ESENEL' };
-  return { title: `${post.title} — ESENEL` };
+  return {
+    title: `${post.title} — ESENEL`,
+    openGraph: {
+      title: `${post.title} — ESENEL`,
+      description: post.excerpt || 'Journal ESENEL — catatan bunga, kerajinan, dan hidup yang tenang.',
+      images: [ogImage('journal')],
+    },
+  };
 }
 
 export default function JournalArticlePage({ params }) {

@@ -131,11 +131,19 @@ function HalftoneDots({ rows = 3, cols = 5, gap = 14, size = 6, color }) {
 /**
  * Konten kartu OG 1200×630. `eyebrow` atas, `title` besar Geist Pixel,
  * rule aksen, `tagline` Plus Jakarta Sans, wordmark + bunga pixel bawah.
+ *
+ * Kalau `image` diisi (data URI gambar buket hasil generate), layout jadi
+ * dua kolom: teks di kiri, foto buket di kanan — OG link hasil generate
+ * langsung menampilkan buketnya, bukan cuma teks.
  */
-export function OgCard({ eyebrow = 'ESENEL · FLEUR ATELIER', title, tagline, accent = BRAND.meadow }) {
-  // Judul pixel diskalakan agar nama panjang tetap muat satu baris.
+export function OgCard({ eyebrow = 'ESENEL · FLEUR ATELIER', title, tagline, accent = BRAND.meadow, image }) {
+  const showImage = Boolean(image);
+  // Judul pixel diskalakan agar nama panjang tetap muat satu baris; lebih
+  // kecil lagi kalau ada foto di sampingnya.
   const len = String(title || '').length;
-  const titleSize = len > 12 ? 84 : len > 9 ? 104 : 132;
+  const titleSize = showImage
+    ? len > 12 ? 62 : len > 9 ? 78 : 96
+    : len > 12 ? 84 : len > 9 ? 104 : 132;
   return (
     <div
       style={{
@@ -182,50 +190,98 @@ export function OgCard({ eyebrow = 'ESENEL · FLEUR ATELIER', title, tagline, ac
           right: 100,
           bottom: 100,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: showImage ? 'row' : 'column',
           justifyContent: 'space-between',
+          gap: showImage ? 60 : 0,
+          alignItems: showImage ? 'center' : 'stretch',
         }}
       >
-        {/* baris atas: eyebrow + titik */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ fontSize: 20, letterSpacing: '0.42em', color: INK_SOFT, fontWeight: 500 }}>
-            {eyebrow}
+        {/* kolom teks */}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          {/* baris atas: eyebrow + titik */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ fontSize: 20, letterSpacing: '0.42em', color: INK_SOFT, fontWeight: 500 }}>
+              {eyebrow}
+            </div>
+            <HalftoneDots color={accent} />
           </div>
-          <HalftoneDots color={accent} />
+
+          {/* judul + rule + tagline */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+            <div
+              style={{
+                fontFamily: 'Geist Pixel',
+                fontSize: titleSize,
+                lineHeight: 1,
+                letterSpacing: '0.01em',
+                color: INK,
+              }}
+            >
+              {title}
+            </div>
+            <div
+              style={{
+                width: 92,
+                height: 5,
+                backgroundColor: accent,
+                marginTop: showImage ? 30 : 38,
+                marginBottom: showImage ? 24 : 30,
+              }}
+            />
+            <div
+              style={{
+                fontSize: showImage ? 26 : 30,
+                lineHeight: 1.55,
+                color: INK_SOFT,
+                maxWidth: showImage ? 560 : 780,
+              }}
+            >
+              {tagline}
+            </div>
+          </div>
+
+          {/* baris bawah: wordmark + bunga pixel */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div style={{ fontSize: 16, letterSpacing: '0.32em', color: INK_SOFT, fontWeight: 500 }}>
+              FLEUR ATELIER
+            </div>
+            <PixelFlower size={showImage ? 68 : 88} color={accent} />
+          </div>
         </div>
 
-        {/* judul + rule + tagline */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+        {/* foto buket hasil generate (kalau ada) */}
+        {showImage && (
           <div
             style={{
-              fontFamily: 'Geist Pixel',
-              fontSize: titleSize,
-              lineHeight: 1,
-              letterSpacing: '0.01em',
-              color: INK,
+              width: 430,
+              height: 430,
+              flexShrink: 0,
+              borderRadius: 28,
+              overflow: 'hidden',
+              border: '2px solid ' + SAND,
+              backgroundColor: SAND,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            {title}
+            <img
+              src={image}
+              width={430}
+              height={430}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
           </div>
-          <div
-            style={{
-              width: 92,
-              height: 5,
-              backgroundColor: accent,
-              marginTop: 38,
-              marginBottom: 30,
-            }}
-          />
-          <div style={{ fontSize: 30, lineHeight: 1.55, color: INK_SOFT, maxWidth: 780 }}>{tagline}</div>
-        </div>
-
-        {/* baris bawah: wordmark + bunga pixel */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <div style={{ fontSize: 16, letterSpacing: '0.32em', color: INK_SOFT, fontWeight: 500 }}>
-            FLEUR ATELIER
-          </div>
-          <PixelFlower size={88} color={accent} />
-        </div>
+        )}
       </div>
     </div>
   );

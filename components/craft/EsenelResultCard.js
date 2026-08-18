@@ -6,11 +6,14 @@
  * sudah kita punya:
  *   - kiri: eyebrow, headline (nama input, font Geist Pixel), foto buket,
  *           nama buket, blurb (cerita), MADE WITH LOVE + swatches brand;
- *   - kanan: ARTI NAMA, MAKNA NAMA (ikon bintang), BUNGA YANG COCOK.
+ *   - kanan: ARTI NAMA, MAKNA NAMA (tanpa ikon bintang), BUNGA YANG COCOK.
  *
  * Tweak sesuai permintaan:
- *   - daftar bunga: font Geist Pixel, kecil, TIDAK bold;
- *   - swatches warna: lebih kecil + kotak rounded;
+ *   - teks rata kiri (bukan justify);
+ *   - cerita & teks section tampil PENUH (tanpa line-clamp) — kartu tumbuh
+ *     mengikuti isi, jadi cerita tidak pernah kepotong;
+ *   - MAKNA NAMA tanpa ikon bintang;
+ *   - daftar bunga: font kecil, swatch KOTAK rounded (bukan bulat);
  *   - foto bisa diklik → dialog perbesar (onPhotoClick).
  */
 
@@ -238,11 +241,7 @@ const STYLE = `
     line-height: 1.6;
     color: var(--cream-soft);
     max-width: 96%;
-    text-align: justify;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    text-align: left;
   }
 
   .ec-spacer {
@@ -303,38 +302,15 @@ const STYLE = `
     font-size: 1.84cqw;
     line-height: 1.46;
     color: var(--ink-soft);
-    text-align: justify;
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    text-align: left;
   }
 
   .ec-arti {
     margin-bottom: 2.6cqw;
   }
 
-  .ec-makna-row {
-    display: flex;
-    gap: 3cqw;
-    align-items: flex-start;
-  }
-  .ec-makna-icon {
-    flex: 0 0 auto;
-    width: 10.8%;
-    aspect-ratio: 1/1;
-    border: 1.4px solid var(--ink-faint);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .ec-makna-icon svg {
-    width: 52%;
-    height: 52%;
-    color: var(--ink);
-  }
-  .ec-makna-text {
-    flex: 1 1 auto;
+  .ec-makna {
+    margin-bottom: 2.6cqw;
   }
 
   .ec-bunga {
@@ -348,7 +324,7 @@ const STYLE = `
     display: flex;
     align-items: center;
     gap: 2.4cqw;
-    padding: 2cqw 2.4cqw;
+    padding: 1.5cqw 2.2cqw;
     border-bottom: 1px solid var(--ink-faint);
     text-align: left;
   }
@@ -362,13 +338,13 @@ const STYLE = `
   }
   .ec-bunga-dot {
     flex: 0 0 auto;
-    width: 5cqw;
-    height: 5cqw;
-    border-radius: 50%;
+    width: 3.8cqw;
+    height: 3.8cqw;
+    border-radius: 0.9cqw; /* kotak kecil rounded, bukan bulat */
   }
   .ec-bunga-name {
     font-family: 'Geist Pixel', 'Geist Mono', monospace;
-    font-size: 2.1cqw;
+    font-size: 1.85cqw;
     font-weight: 400;
     color: var(--ink);
     letter-spacing: 0.005em;
@@ -379,7 +355,7 @@ const STYLE = `
   }
   .ec-bunga-en {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 1.5cqw;
+    font-size: 1.35cqw;
     font-weight: 400;
     color: var(--ink-soft);
     white-space: nowrap;
@@ -498,14 +474,7 @@ export default function EsenelResultCard({
             <div className="ec-makna">
               <div className="ec-section-label">Makna Nama</div>
               <div className="ec-section-rule" />
-              <div className="ec-makna-row">
-                <div className="ec-makna-icon">
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 1.5c.6 4.2 1.5 6.7 3.1 8.5 1.7 1.7 4.2 2.6 8.4 3.1-4.2.5-6.7 1.4-8.4 3.1-1.6 1.8-2.5 4.3-3.1 8.5-.6-4.2-1.5-6.7-3.1-8.5C7.2 14.5 4.7 13.6.5 13.1c4.2-.5 6.7-1.4 8.4-3.1C10.5 8.2 11.4 5.7 12 1.5Z" />
-                  </svg>
-                </div>
-                <p className="ec-section-body ec-makna-text">{story?.maknaNama || ''}</p>
-              </div>
+              <p className="ec-section-body">{story?.maknaNama || ''}</p>
             </div>
 
             <div className="ec-bunga">
