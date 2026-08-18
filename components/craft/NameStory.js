@@ -5,7 +5,7 @@ import { useLenis } from 'lenis/react';
 import { motion, useReducedMotion } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Link2, RotateCcw, ShoppingBag, ZoomIn } from 'lucide-react';
+import { RotateCcw, ShoppingBag, ZoomIn } from 'lucide-react';
 import { products } from '@/data/products';
 import { normalizeName } from '@/lib/nameNormalize';
 import { estimateBouquetPrice } from '@/lib/flowerPrices';
@@ -18,7 +18,7 @@ import FlowerPriceList from '@/components/craft/FlowerPriceList';
 const DIRECT_ITEM_KEY = 'esenel.directItem.v1';
 import ScrambleText, { SCRAMBLE_MS } from '@/components/craft/ScrambleText';
 import GeneratedImage from '@/components/craft/GeneratedImage';
-import ShareCardDialog from '@/components/craft/ShareCardDialog';
+import ShareActions from '@/components/craft/ShareActions';
 
 const EASE = [0.16, 1, 0.3, 1];
 const SPRING_LAYOUT = { type: 'spring', stiffness: 360, damping: 32, mass: 0.6 };
@@ -151,37 +151,8 @@ export default function NameStory({ story, onRestart }) {
   // Rincian harga langsung tampil (collapsible); dialog perbesar gambar.
   const [priceOpen, setPriceOpen] = useState(true);
   const [imgOpen, setImgOpen] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
   const hasImage = Boolean((imageUrl && !imgFailed) || similar[0]);
   const priceRef = useRef(null);
-
-  // Salin link halaman hasil generate — OG image dinamis menampilkan nama
-  // buket + deskripsi, dan penerima link langsung melihat story auto-play.
-  const copyLink = useCallback(async () => {
-    const url = `${window.location.origin}/craft/name/${encodeURIComponent(nameKey)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2200);
-      return;
-    } catch {
-      // fallback input tersembunyi
-    }
-    const ta = document.createElement('textarea');
-    ta.value = url;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      document.execCommand('copy');
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2200);
-    } catch {
-      // clipboard tidak tersedia
-    }
-    ta.remove();
-  }, [nameKey]);
 
   // Section yang sudah benar-benar tiba (scroll selesai). Scramble & generate
   // menunggu ini supaya animasinya terlihat saat halaman sampai, bukan
@@ -612,7 +583,8 @@ export default function NameStory({ story, onRestart }) {
             )}
           </div>
 
-          {/* Tombol kecil — muat sejajar di satu baris */}
+          {/* Tombol utama — hanya CHECKOUT + TULIS NAMA LAIN; bagikan jadi
+              teks yang bisa di-expand di bawah (ShareActions) */}
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
@@ -621,21 +593,6 @@ export default function NameStory({ story, onRestart }) {
             >
               <ShoppingBag size={13} />
               CHECKOUT
-            </button>
-            <ShareCardDialog
-              story={story}
-              imageSrc={hasImage ? (imageUrl && !imgFailed ? imageUrl : similar[0]?.image) : null}
-              imageAlt={`Buket ${story.namaBuket || story.nama}`}
-              nameKey={nameKey}
-            />
-            <button
-              type="button"
-              onClick={copyLink}
-              aria-label="Salin link hasil generate"
-              className="inline-flex items-center gap-1.5 rounded-pill border border-ink/20 px-4 py-2 text-[11px] font-medium tracking-nav text-ink/70 transition-colors hover:border-ink/45 hover:text-ink"
-            >
-              <Link2 size={13} />
-              {linkCopied ? 'LINK DISALIN!' : 'SALIN LINK'}
             </button>
             <button
               type="button"
@@ -646,6 +603,13 @@ export default function NameStory({ story, onRestart }) {
               TULIS NAMA LAIN
             </button>
           </div>
+
+          {/* Bagikan — teks di bawah dua tombol, expand card UNDUH + BAGIKAN */}
+          <ShareActions
+            story={story}
+            imageSrc={hasImage ? (imageUrl && !imgFailed ? imageUrl : similar[0]?.image) : null}
+            imageAlt={`Buket ${story.namaBuket || story.nama}`}
+          />
 
           {/* Katalog bunga yang hampir sama — boleh di bawah, tetap bisa scroll */}
           {similar.length > 0 && (
