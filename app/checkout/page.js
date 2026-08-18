@@ -101,14 +101,14 @@ export default function CheckoutPage() {
 
     // Date & time validation (the picker has no native `required`).
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(form.tanggal)) {
-      setError('Silakan pilih tanggal & jam ambil/kirim terlebih dahulu.');
+      setError('Please choose a pickup/delivery date & time first.');
       setSending(false);
       return;
     }
 
     // Payment proof is required.
     if (!proofFile) {
-      setError('Bukti pembayaran wajib dilampirkan (screenshot transfer/QRIS).');
+      setError('A payment proof is required (transfer/QRIS screenshot).');
       setSending(false);
       return;
     }
@@ -118,7 +118,7 @@ export default function CheckoutPage() {
     if (form.status === 'DP') {
       dpNominal = Number(String(form.dpNominal).replace(/\D/g, ''));
       if (!dpNominal || dpNominal < dpMin) {
-        setError(`DP minimal 50% dari total (Rp ${formatRupiah(dpMin)}).`);
+        setError(`DP must be at least 50% of the total (Rp ${formatRupiah(dpMin)}).`);
         setSending(false);
         return;
       }
@@ -215,13 +215,13 @@ export default function CheckoutPage() {
             ORDER {orderNumber}
           </p>
           <h1 className="font-display text-4xl md:text-5xl leading-[1.1] mb-6">
-            Pesanan terkirim ke atelier. ✿
+            Your order is on its way to the atelier. ✿
           </h1>
           <p className="text-ink/60 mb-4 max-w-md mx-auto">
-            WhatsApp sudah terbuka dengan pesanan kamu terisi otomatis — tinggal tekan kirim.
+            WhatsApp is open with your order pre-filled — just press send.
           </p>
           <p className="text-ink/40 text-sm mb-10 max-w-md mx-auto">
-            Jangan lupa lampirkan bukti pembayaran di chat kalau belum termasuk dalam pesan.
+            Don't forget to attach the payment proof in the chat if it's not already in the message.
           </p>
           <Link
             href="/shop"
@@ -284,7 +284,7 @@ export default function CheckoutPage() {
 
             {/* Data Pemesan */}
             <section className="border-t border-sand pt-8 mb-8">
-              <p className="text-[12px] tracking-nav text-earth font-medium mb-5">DATA PEMESAN</p>
+              <p className="text-[12px] tracking-nav text-earth font-medium mb-5">YOUR DETAILS</p>
               <ContactFields
                 history={history}
                 nama={form.pemesanNama}
@@ -292,17 +292,17 @@ export default function CheckoutPage() {
                 onNama={(v) => setForm((f) => ({ ...f, pemesanNama: v }))}
                 onWa={(v) => setForm((f) => ({ ...f, pemesanWa: v }))}
                 onPick={(h) => setForm((f) => ({ ...f, pemesanNama: h.nama, pemesanWa: h.wa }))}
-                namaPlaceholder="Nama kamu"
+                namaPlaceholder="Your name"
               />
               <label className="block mt-5">
-                <span className={labelClass}>EMAIL (OPSIONAL, UNTUK CATATAN)</span>
+                <span className={labelClass}>EMAIL (OPTIONAL, FOR OUR RECORDS)</span>
                 <input type="email" value={form.email} onChange={set('email')} className={inputClass} placeholder="you@email.com" />
               </label>
             </section>
 
             {/* Data Penerima */}
             <section className="border-t border-sand pt-8 mb-8">
-              <p className="text-[12px] tracking-nav text-earth font-medium mb-5">DATA PENERIMA</p>
+              <p className="text-[12px] tracking-nav text-earth font-medium mb-5">RECIPIENT DETAILS</p>
               <ContactFields
                 history={history}
                 nama={form.penerimaNama}
@@ -310,14 +310,14 @@ export default function CheckoutPage() {
                 onNama={(v) => setForm((f) => ({ ...f, penerimaNama: v }))}
                 onWa={(v) => setForm((f) => ({ ...f, penerimaWa: v }))}
                 onPick={(h) => setForm((f) => ({ ...f, penerimaNama: h.nama, penerimaWa: h.wa }))}
-                namaPlaceholder="Nama penerima"
+                namaPlaceholder="Recipient's name"
                 waPlaceholder="+62… / 08…"
               />
             </section>
 
             {/* Detail Pesanan */}
             <section className="border-t border-sand pt-8 mb-8">
-              <p className="text-[12px] tracking-nav text-earth font-medium mb-5">DETAIL PESANAN</p>
+              <p className="text-[12px] tracking-nav text-earth font-medium mb-5">ORDER DETAILS</p>
 
               <div className="flex rounded-pill border border-sand p-1 mb-5">
                 {['Ambil', 'Dikirim'].map((opt) => (
@@ -327,20 +327,20 @@ export default function CheckoutPage() {
                     onClick={() => setForm((f) => ({ ...f, ambilDikirim: opt }))}
                     className={segBtn(form.ambilDikirim === opt)}
                   >
-                    {opt.toUpperCase()}
+                    {opt === 'Ambil' ? 'PICK UP' : 'DELIVERY'}
                   </button>
                 ))}
               </div>
 
               {form.ambilDikirim === 'Dikirim' && (
                 <label className="block mb-5">
-                  <span className={labelClass}>ALAMAT PENGIRIMAN *</span>
-                  <textarea required value={form.alamat} onChange={set('alamat')} rows={2} className={`${inputClass} rounded-2xl resize-none`} placeholder="Alamat lengkap penerima" />
+                  <span className={labelClass}>DELIVERY ADDRESS *</span>
+                  <textarea required value={form.alamat} onChange={set('alamat')} rows={2} className={`${inputClass} rounded-2xl resize-none`} placeholder="Recipient's full address" />
                 </label>
               )}
 
               <div className="mb-5">
-                <span className={labelClass}>TANGGAL & JAM (AMBIL/KIRIM) *</span>
+                <span className={labelClass}>DATE & TIME (PICK UP/DELIVERY) *</span>
                 <DateTimePicker
                   value={form.tanggal}
                   onChange={(v) => setForm((f) => ({ ...f, tanggal: v }))}
@@ -348,19 +348,19 @@ export default function CheckoutPage() {
               </div>
 
               <label className="block mb-5">
-                <span className={labelClass}>REQUEST (KOSONGKAN = SESUAI KATALOG)</span>
-                <input value={form.request} onChange={set('request')} className={inputClass} placeholder="sesuai katalog" />
+                <span className={labelClass}>REQUEST (LEAVE EMPTY = AS PER CATALOG)</span>
+                <input value={form.request} onChange={set('request')} className={inputClass} placeholder="as per catalog" />
               </label>
 
               <label className="block">
-                <span className={labelClass}>UCAPAN UNTUK PENERIMA (OPSIONAL)</span>
-                <input value={form.ucapan} onChange={set('ucapan')} className={inputClass} placeholder="Selamat ulang tahun…" />
+                <span className={labelClass}>MESSAGE FOR THE RECIPIENT (OPTIONAL)</span>
+                <input value={form.ucapan} onChange={set('ucapan')} className={inputClass} placeholder="Happy birthday…" />
               </label>
             </section>
 
             {/* Pembayaran */}
             <section className="border-t border-sand pt-8 mb-8">
-              <p className="text-[12px] tracking-nav text-earth font-medium mb-5">PEMBAYARAN</p>
+              <p className="text-[12px] tracking-nav text-earth font-medium mb-5">PAYMENT</p>
 
               <div className="flex rounded-pill border border-sand p-1 mb-5">
                 {['QRIS', 'Rekening'].map((opt) => (
@@ -370,7 +370,7 @@ export default function CheckoutPage() {
                     onClick={() => setForm((f) => ({ ...f, metode: opt }))}
                     className={segBtn(form.metode === opt)}
                   >
-                    {opt.toUpperCase()}
+                    {opt === 'QRIS' ? 'QRIS' : 'BANK TRANSFER'}
                   </button>
                 ))}
               </div>
@@ -382,7 +382,7 @@ export default function CheckoutPage() {
                       type="button"
                       onClick={() => setShowQris(true)}
                       className="shrink-0 rounded-xl overflow-hidden border border-sand bg-white"
-                      aria-label="Lihat QRIS lebih besar"
+                      aria-label="View QRIS larger"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={QRIS_IMAGE} alt="QRIS ESENEL" className="h-28 w-28 object-contain" />
@@ -391,7 +391,7 @@ export default function CheckoutPage() {
                       <p className="font-medium text-ink mb-1">QRIS</p>
                       <p className="text-[12px] leading-relaxed text-ink/70">{QRIS_NMID}</p>
                       <p className="text-[12px] text-ink/50 mt-1">
-                        Scan dengan m-Banking / e-wallet mana pun.
+                        Scan with any mobile banking / e-wallet.
                       </p>
                       <div className="mt-3 flex gap-2">
                         <button
@@ -399,14 +399,14 @@ export default function CheckoutPage() {
                           onClick={() => setShowQris(true)}
                           className="rounded-pill border border-ink/20 px-4 py-2 text-[12px] font-medium tracking-nav hover:bg-sand/50 transition-colors"
                         >
-                          LIHAT QRIS
+                          VIEW QRIS
                         </button>
                         <a
                           href={QRIS_IMAGE}
                           download="qris-esenel.jpg"
                           className="rounded-pill bg-ink text-cloud px-4 py-2 text-[12px] font-medium tracking-nav hover:bg-ink/90 transition-colors"
                         >
-                          UNDUH QRIS
+                          DOWNLOAD QRIS
                         </a>
                       </div>
                     </div>
@@ -414,7 +414,7 @@ export default function CheckoutPage() {
                 </div>
               ) : (
                 <div className="rounded-2xl bg-sand/30 px-5 py-4 text-sm text-ink/80 mb-6">
-                  <p className="font-medium text-ink mb-1">Transfer Rekening</p>
+                  <p className="font-medium text-ink mb-1">Bank Transfer</p>
                   <p>Mandiri — {REKENING_MANDIRI}</p>
                 </div>
               )}
@@ -427,14 +427,14 @@ export default function CheckoutPage() {
                     onClick={() => setForm((f) => ({ ...f, status: opt }))}
                     className={segBtn(form.status === opt)}
                   >
-                    {opt.toUpperCase()}
+                    {opt === 'Lunas' ? 'FULL PAYMENT' : 'DP'}
                   </button>
                 ))}
               </div>
 
               {form.status === 'DP' && (
                 <label className="block mb-5">
-                  <span className={labelClass}>NOMINAL DP * (MINIMAL 50% = Rp {formatRupiah(dpMin)})</span>
+                  <span className={labelClass}>DP AMOUNT * (MINIMUM 50% = Rp {formatRupiah(dpMin)})</span>
                   <input
                     required
                     inputMode="numeric"
@@ -447,7 +447,7 @@ export default function CheckoutPage() {
               )}
 
               <label className="block">
-                <span className={labelClass}>BUKTI PEMBAYARAN * (SCREENSHOT TRANSFER / QRIS)</span>
+                <span className={labelClass}>PAYMENT PROOF * (TRANSFER / QRIS SCREENSHOT)</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -469,7 +469,7 @@ export default function CheckoutPage() {
               onClick={() => setShowTerms(true)}
               className="mx-auto block text-[12px] text-ink/50 underline underline-offset-4 hover:text-earth transition-colors mb-6"
             >
-              Lihat ketentuan pembayaran & pengiriman
+              See payment & delivery terms
             </button>
 
             {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
@@ -482,7 +482,7 @@ export default function CheckoutPage() {
               {sending ? 'SENDING…' : 'SEND ORDER VIA WHATSAPP'}
             </button>
             <p className="text-ink/40 text-xs text-center mt-4">
-              WhatsApp terbuka dengan pesanan terisi otomatis — tinggal tekan kirim. Nomor atelier
+              WhatsApp opens with your order pre-filled — just press send. Atelier line
               0822-2582-8290.
             </p>
           </form>
@@ -496,16 +496,16 @@ export default function CheckoutPage() {
               <div
                 role="dialog"
                 aria-modal="true"
-                aria-label="Ketentuan"
+                aria-label="Terms"
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-3xl bg-cloud p-7 shadow-2xl"
               >
                 <div className="flex items-center justify-between mb-5">
-                  <h2 className="font-display text-2xl">Ketentuan</h2>
+                  <h2 className="font-display text-2xl">Terms</h2>
                   <button
                     type="button"
                     onClick={() => setShowTerms(false)}
-                    aria-label="Tutup"
+                    aria-label="Close"
                     className="p-2 rounded-full hover:bg-sand/60 transition-colors"
                   >
                     ✕
@@ -541,7 +541,7 @@ export default function CheckoutPage() {
                   <button
                     type="button"
                     onClick={() => setShowQris(false)}
-                    aria-label="Tutup"
+                    aria-label="Close"
                     className="p-2 rounded-full hover:bg-sand/60 transition-colors"
                   >
                     ✕
@@ -550,7 +550,7 @@ export default function CheckoutPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={QRIS_IMAGE}
-                  alt="QRIS ESENEL — scan untuk membayar"
+                  alt="QRIS ESENEL — scan to pay"
                   className="mx-auto h-64 w-64 rounded-2xl border border-sand bg-white object-contain"
                 />
                 <p className="mt-4 text-[12px] text-ink/70 leading-relaxed">{QRIS_NMID}</p>
@@ -562,7 +562,7 @@ export default function CheckoutPage() {
                   download="qris-esenel.jpg"
                   className="inline-block w-full bg-ink text-cloud py-3 rounded-pill text-[13px] font-medium tracking-nav hover:bg-ink/90 transition-colors"
                 >
-                  UNDUH QRIS
+                  DOWNLOAD QRIS
                 </a>
               </div>
             </div>

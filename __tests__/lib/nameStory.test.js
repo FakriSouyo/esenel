@@ -6,6 +6,11 @@ import {
 } from '@/lib/nameStoryPrompt';
 import { getDummyStory } from '@/lib/nameStoryDummy';
 import {
+  BOUQUET_NAMES,
+  ensureUniqueBouquetName,
+  pickBouquetName,
+} from '@/lib/bouquetNames';
+import {
   buildNameImageUrl,
   CLOUDFLARE_WORKER_ENDPOINT,
   enforceImagePrompt,
@@ -17,12 +22,72 @@ import {
   NO_LIVING_BEINGS_SUFFIX,
   seedFromKey,
 } from '@/lib/nameStoryImage';
+import {
+  enrichFlowerNames,
+  getPoeticFlowerName,
+  POETIC_DICTIONARY,
+} from '@/lib/flowerPoeticNames';
+import { FLOWER_PRICE_DATA } from '@/lib/flowerPrices';
 
 describe('buildNamePrompt', () => {
   it('embeds the name and demands JSON-only output', () => {
     const prompt = buildNamePrompt('Carin');
     expect(prompt).toContain('Carin');
     expect(prompt.toLowerCase()).toContain('nama');
+  });
+
+  it('marks the catalog list as a tone reference, never to be copied', () => {
+    const prompt = buildNamePrompt('Carin', ['Alba', 'Bali']);
+    expect(prompt).toContain('Alba');
+    expect(prompt).toMatch(/HANYA referensi NADA/i);
+    expect(prompt).toMatch(/DILARANG KERAS menyalinnya/i);
+    expect(prompt).toMatch(/TIDAK boleh memakai nama input/i);
+  });
+});
+
+describe('bouquetNames', () => {
+  it('picks deterministically from a poetic pool', () => {
+    expect(pickBouquetName('Carin')).toBe(pickBouquetName('Carin'));
+    expect(BOUQUET_NAMES).toContain(pickBouquetName('Carin'));
+    expect(pickBouquetName('a')).not.toBe(pickBouquetName('b'));
+  });
+
+  it('skips forbidden names (catalog / input words), case & accent insensitive', () => {
+    const ex = ['Yūgen', 'Carin', 'Dewi', 'ratrika'];
+    const got = pickBouquetName('Dewi Ratrika Rinupa Sejati', { exclude: ex });
+    expect(ex.map((x) => x.toLowerCase())).not.toContain(got.toLowerCase());
+    // aksen: 'Yūgen' dilarang, jadi 'Yūgen' (normalize -> 'yugen') tidak muncul
+    expect(got.toLowerCase()).not.toBe('yūgen');
+    expect(got.toLowerCase()).not.toBe('yugen');
+  });
+
+  it('replaces a forbidden bouquet name with a unique poetic one', () => {
+    const catalogs = ['Alba', 'Bali', 'Colmar'];
+    // nama buket = nama katalog → diganti
+    let story = ensureUniqueBouquetName({ namaBuket: 'Bali' }, 'Carin', catalogs);
+    expect(story.namaBuket).not.toBe('Bali');
+    expect(catalogs).not.toContain(story.namaBuket);
+    // nama buket = salah satu kata nama input → diganti
+    story = ensureUniqueBouquetName(
+      { namaBuket: 'Ratrika' },
+      'Dewi Ratrika Rinupa Sejati',
+      catalogs
+    );
+    expect(story.namaBuket).not.toBe('Ratrika');
+    // nama buket yang MENURUN dari kata input (bukan salinan persis) → diganti
+    story = ensureUniqueBouquetName(
+      { namaBuket: 'Ratrī Kusuma' },
+      'Dewi Ratrika Rinupa Sejati',
+      catalogs
+    );
+    expect(story.namaBuket).not.toBe('Ratrī Kusuma');
+    expect(story.namaBuket.toLowerCase()).not.toContain('ratri');
+    // nama buket = nama input persis → diganti
+    story = ensureUniqueBouquetName({ namaBuket: 'Carin' }, 'Carin', catalogs);
+    expect(story.namaBuket).not.toBe('Carin');
+    // nama buket yang aman → dibiarkan
+    story = ensureUniqueBouquetName({ namaBuket: 'Tsukiyo' }, 'Carin', catalogs);
+    expect(story.namaBuket).toBe('Tsukiyo');
   });
 });
 
@@ -43,9 +108,70 @@ describe('NAME_STORY_SYSTEM_PROMPT', () => {
   });
 
   it('requests story, meaning, flowers, bouquet name and image prompt in its JSON schema', () => {
-    for (const key of ['artiNama', 'maknaNama', 'cerita', 'bunga', 'imagePrompt', 'namaBuket']) {
+    for (const key of ['artiNama', 'maknaNama', 'cerita', 'bunga', 'imagePrompt', 'namaBuket', 'namaPuitis']) {
       expect(NAME_STORY_SYSTEM_PROMPT).toContain(key);
     }
+  });
+
+  it('demands a one-word poetic flower name from the five languages, not a person name', () => {
+    const p = NAME_STORY_SYSTEM_PROMPT.toLowerCase();
+    expect(p).toContain('namapuitis');
+    expect(p).toContain('5 bahasa');
+    for (const lang of ['arab', 'inggris', 'sanskerta', 'nordik', 'jepang']) {
+      expect(p).toContain(lang);
+    }
+    expect(p).toMatch(/satu kata/i);
+    expect(p).toMatch(/bukan nama orang|dilarang keras memakai nama orang/i);
+    expect(p).toMatch(/hanya namanya/i);
+  });
+});
+
+describe('flowerPoeticNames', () => {
+  it('gives every flower in the price database a one-word poetic name', () => {
+    const oneWord = /^[\p{L}\p{M}'-]+$/u;
+    for (const f of FLOWER_PRICE_DATA) {
+      const name = getPoeticFlowerName(f.nama);
+      expect(name, f.nama).toBeTruthy();
+      expect(name.split(/\s+/), f.nama).toHaveLength(1);
+      expect(name, f.nama).toMatch(oneWord);
+      expect(name, f.nama).not.toMatch(/\d/);
+    }
+  });
+
+  it('picks deterministically so the same flower always gets the same name', () => {
+    expect(getPoeticFlowerName('Eustoma')).toBe(getPoeticFlowerName('eustoma'));
+    expect(getPoeticFlowerName('Tulip putih')).toBe(getPoeticFlowerName('Tulip'));
+    expect(POETIC_DICTIONARY.some((e) => e.alias.includes('eustoma'))).toBe(true);
+  });
+
+  it('enriches flowers missing a poetic name from the deterministic dictionary', () => {
+    const story = { bunga: [{ nama: 'Eustoma', alasan: 'x' }, { nama: 'Lavender', alasan: 'y' }] };
+    enrichFlowerNames(story);
+    expect(story.bunga[0].namaPuitis).toBe('Lalita');
+    expect(story.bunga[1].namaPuitis).toBe('Sakina');
+  });
+
+  it('replaces multi-word or plain-flower-name poetic names', () => {
+    const story = {
+      bunga: [
+        { nama: 'Eustoma', namaPuitis: 'Kusuma Melati', alasan: 'x' }, // 2 kata → diganti
+        { nama: 'Lavender', namaPuitis: 'Lavender', alasan: 'y' }, // nama bunga itu sendiri → diganti
+      ],
+    };
+    enrichFlowerNames(story);
+    expect(story.bunga[0].namaPuitis).toBe('Lalita');
+    expect(story.bunga[1].namaPuitis).toBe('Sakina');
+  });
+
+  it('keeps a valid one-word poetic name untouched', () => {
+    const story = { bunga: [{ nama: 'Eustoma', namaPuitis: 'Anjali', alasan: 'x' }] };
+    enrichFlowerNames(story);
+    expect(story.bunga[0].namaPuitis).toBe('Anjali');
+  });
+
+  it('is a no-op for stories without flowers', () => {
+    expect(enrichFlowerNames({ bunga: [] })).toEqual({ bunga: [] });
+    expect(enrichFlowerNames(null)).toBeNull();
   });
 });
 
@@ -57,13 +183,18 @@ describe('parseStoryResponse', () => {
       artiNama: 'Arti',
       maknaNama: 'Makna',
       cerita: 'Cerita',
-      bunga: [{ nama: 'Anthurium', alasan: 'tulus' }],
+      bunga: [
+        { nama: 'Anthurium', namaPuitis: 'Hugr', alasan: 'tulus' },
+        { nama: 'Tulip', alasan: 'anggun' },
+      ],
       imagePrompt: 'prompt',
     });
     const story = parseStoryResponse(raw);
     expect(story.artiNama).toBe('Arti');
     expect(story.namaBuket).toBe('Colmar');
-    expect(story.bunga).toHaveLength(1);
+    expect(story.bunga).toHaveLength(2);
+    expect(story.bunga[0].namaPuitis).toBe('Hugr'); // namaPuitis AI dipertahankan
+    expect(story.bunga[1].namaPuitis).toBe(''); // yang kosong tetap kosong (di-enrich route)
   });
 
   it('caps flowers at 8 and drops empty ones', () => {
@@ -104,6 +235,12 @@ describe('getDummyStory', () => {
     expect(story.bunga.length).toBeLessThanOrEqual(8);
     expect(story.imagePrompt.length).toBeGreaterThan(10);
     expect(story.namaBuket.length).toBeGreaterThan(0);
+    // tiap bunga punya nama puitis 1 kata
+    for (const b of story.bunga) {
+      expect(b.namaPuitis, b.nama).toBeTruthy();
+      expect(b.namaPuitis.split(/\s+/), b.nama).toHaveLength(1);
+      expect(b.namaPuitis, b.nama).not.toBe(b.nama);
+    }
     // gaya bicara: menyapa "kamu", bukan menyebut dari luar
     expect(story.maknaNama).toContain('Kamu');
     expect(story.maknaNama).not.toMatch(/orang dengan nama/);
@@ -113,11 +250,22 @@ describe('getDummyStory', () => {
     expect(story.imagePrompt.toLowerCase()).toContain('catalog');
   });
 
-  it('picks the bouquet name deterministically from the catalog list', () => {
+  it('picks a deterministic poetic bouquet name, never a catalog or input name', () => {
     const names = ['Alba', 'Bali', 'Colmar'];
     expect(getDummyStory('Carin', names).namaBuket).toBe(getDummyStory('Carin', names).namaBuket);
-    expect(names).toContain(getDummyStory('Carin', names).namaBuket);
-    expect(getDummyStory('Carin', names).namaBuket).not.toBe('Annecy'); // di luar daftar
+    expect(names).not.toContain(getDummyStory('Carin', names).namaBuket); // bukan salinan katalog
+    expect(getDummyStory('Carin', names).namaBuket.toLowerCase()).not.toContain('carin'); // bukan nama input
+    expect(getDummyStory('Bali', names).namaBuket.toLowerCase()).not.toContain('bali');
+  });
+
+  it('handles long multi-word names as one person, with a unique bouquet name', () => {
+    const longName = 'Dewi Ratrika Rinupa Sejati';
+    const story = getDummyStory(longName, ['Alba', 'Bali']);
+    expect(story.nama).toBe(longName); // nama penuh dipertahankan
+    expect(story.namaBuket).not.toBe('Ratrika');
+    expect(story.namaBuket).not.toBe('Sejati');
+    expect(story.namaBuket.toLowerCase()).not.toContain('ratrika');
+    expect(story.namaBuket.toLowerCase()).not.toContain('sejati');
   });
 });
 
@@ -158,7 +306,7 @@ describe('nameStoryImage', () => {
       ],
     };
     enforceImagePrompt(story);
-    expect(story.imagePrompt).toContain('ALL of these flower varieties');
+    expect(story.imagePrompt).toMatch(/mixing 3 different flowers/i);
     expect(story.imagePrompt).toContain('deep red roses');
     expect(story.imagePrompt).toContain('purple lavender sprigs');
     expect(story.imagePrompt).toContain('tulips'); // fallback terjemahan dari nama
@@ -177,8 +325,8 @@ describe('nameStoryImage', () => {
   it('locks the composition as still life on a surface so the bouquet is not held', () => {
     const story = { imagePrompt: 'A bouquet.', bunga: [{ nama: 'Lavender', namaEn: 'purple lavender sprigs' }] };
     enforceImagePrompt(story);
-    expect(story.imagePrompt).toMatch(/^Still life product photograph/i);
-    expect(story.imagePrompt).toMatch(/standing upright alone on a plain wooden table/i);
+    expect(story.imagePrompt).toMatch(/^A single bouquet mixing/i);
+    expect(story.imagePrompt).toMatch(/still life on a plain wooden table/i);
   });
 
   it('enforceImagePrompt is a no-op for stories without flowers', () => {

@@ -17,9 +17,9 @@ export default function ContactFields({
   onNama,
   onWa,
   onPick,
-  namaLabel = 'NAMA LENGKAP *',
-  waLabel = 'NO WHATSAPP *',
-  namaPlaceholder = 'Nama',
+  namaLabel = 'FULL NAME *',
+  waLabel = 'WHATSAPP NUMBER *',
+  namaPlaceholder = 'Name',
   waPlaceholder = '0822…',
   inputMode = 'tel',
 }) {

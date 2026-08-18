@@ -121,7 +121,11 @@ export default function CoverflowCarousel({
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // JANGAN capture di sini. Kalau langsung setPointerCapture, event `click`
+    // setelah pointerup ikut dialihkan ke frame, jadi Link di dalam kartu
+    // tidak pernah navigasi ke halaman produk. Capture baru diambil setelah
+    // gerakan melewati ambang drag (lihat onPointerMove) — tap/klik murni
+    // dibiarkan jatuh ke kartu dan menavigasi.
     targetRef.current = posRef.current;
     dragRef.current = {
       id: event.pointerId,
@@ -129,6 +133,8 @@ export default function CoverflowCarousel({
       pos: posRef.current,
       v: 0,
       t: performance.now(),
+      captured: false,
+      moved: false,
     };
   };
 
@@ -144,6 +150,20 @@ export default function CoverflowCarousel({
     posRef.current = clamp(drag.pos - (event.clientX - drag.x) / pitch);
     drag.v = ((posRef.current - previous) / Math.max(now - drag.t, 1)) * 1000;
     drag.t = now;
+
+    // Ambil capture begitu benar-benar drag (bukan klik): klik yang terjadi
+    // saat pointer capture aktif akan jatuh ke frame, bukan ke Link — justru
+    // itu yang kita mau untuk drag (jangan navigasi), dan tidak terjadi untuk
+    // tap karena belum ada capture.
+    if (!drag.captured && Math.abs(event.clientX - drag.x) > 6) {
+      drag.captured = true;
+      drag.moved = true;
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // pointer sudah lepas — abaikan
+      }
+    }
 
     const index = indexAt(posRef.current);
     if (index !== selected) setSelected(index);

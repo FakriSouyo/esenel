@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLenis } from 'lenis/react';
-import { Search, ShoppingBag, X, ChevronDown, ArrowLeft, ArrowRight, Menu } from 'lucide-react';
-import { collectionGroups, collectionCopy, collectionImages } from '@/data/collections';
+import { Search, ShoppingBag, ChevronDown, ArrowRight, Menu } from 'lucide-react';
+import { collectionGroups } from '@/data/collections';
 import { useCart } from '@/components/cart/CartContext';
 import SearchOverlay from '@/components/search/SearchOverlay';
 import { usePathname } from 'next/navigation';
@@ -22,7 +22,7 @@ const easeOut = [0.16, 1, 0.3, 1];
 
 const mobileItems = [
   { label: 'HOME', href: '/', number: 1 },
-  { label: 'COLLECTION', view: 'collections', number: 2 },
+  { label: 'COLLECTION', href: '/shop', number: 2 },
   { label: 'CRAFT', href: '/craft', number: 3 },
   { label: 'ABOUT', href: '/about', number: 4 },
   { label: 'JOURNAL', href: '/journal', number: 5 },
@@ -32,7 +32,6 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mobileView, setMobileView] = useState('main');
   const [searchOpen, setSearchOpen] = useState(false);
   const [dragY, setDragY] = useState(0);
   const dragRef = useRef(null);
@@ -235,10 +234,7 @@ export default function Navbar() {
             <button
               aria-label="Open menu"
               className="p-2.5 rounded-nav hover:bg-ink/[0.05] transition-colors lg:hidden"
-              onClick={() => {
-                setMobileView('main');
-                setMobileOpen(true);
-              }}
+              onClick={() => setMobileOpen(true)}
             >
               <Menu size={19} />
             </button>
@@ -260,7 +256,7 @@ export default function Navbar() {
               onMouseLeave={closeMenu}
               className="mt-2 rounded-navbar bg-white/60 backdrop-blur-xl border border-white/40 shadow-[0_6px_24px_rgba(0,0,0,0.12)] overflow-hidden hidden lg:block origin-top w-[680px]"
             >
-              <div className="grid grid-cols-[1fr_1fr_1.2fr] gap-10 p-10">
+              <div className="grid grid-cols-[1fr_1fr_0.9fr] gap-10 p-10">
                 {collectionGroups.map((group, gi) => (
                   <div key={group.heading}>
                     <p className="text-[11px] tracking-nav text-ink/40 mb-4 font-medium">
@@ -285,22 +281,24 @@ export default function Navbar() {
                         </li>
                       ))}
                     </ul>
+                    {/* Plain text link under 02 — Arrangements */}
+                    {gi === 1 && (
+                      <Link
+                        href="/shop"
+                        onClick={() => setMenuOpen(false)}
+                        className="group mt-6 flex items-center gap-1.5"
+                      >
+                        <span className="text-[13px] font-medium tracking-nav text-ink/70 transition-colors duration-300 group-hover:text-earth">
+                          Explore the shop
+                        </span>
+                        <ArrowRight
+                          size={13}
+                          className="shrink-0 text-earth transition-transform duration-300 group-hover:translate-x-0.5"
+                        />
+                      </Link>
+                    )}
                   </div>
                 ))}
-                <Link
-                  href="/shop"
-                  onClick={() => setMenuOpen(false)}
-                  className="group relative rounded-nav overflow-hidden h-full min-h-[180px] block"
-                >
-                  <div
-                    className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                    style={{ backgroundImage: `url(${collectionImages['extra-large']})` }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-ink/50 to-transparent" />
-                  <span className="absolute bottom-4 left-4 text-cloud text-[13px] font-medium tracking-nav">
-                    Explore the shop →
-                  </span>
-                </Link>
               </div>
             </motion.div>
           )}
@@ -339,144 +337,50 @@ export default function Navbar() {
                 <span className="mx-auto block h-1.5 w-24 rounded-full bg-ink/15" />
               </div>
 
-              {/* Collections header — stays fixed while only the list scrolls */}
-              {mobileView === 'collections' && (
-                <div className="flex w-full shrink-0 items-center justify-between px-1 pb-3">
+              <div className="flex w-full flex-col gap-5 overflow-y-auto px-2 pb-6">
+                <nav className="flex flex-col gap-1">
+                  {mobileItems.map((item) => (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className="group flex w-full items-center justify-between gap-3 px-4 py-4 rounded-2xl hover:bg-sand/40 transition-colors"
+                    >
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-[10px] text-earth/60 tabular-nums">
+                          {String(item.number).padStart(2, '0')}
+                        </span>
+                        <span className="font-display text-2xl leading-none">
+                          {item.label}
+                        </span>
+                      </div>
+                      <ArrowRight size={17} className="text-earth" />
+                    </Link>
+                  ))}
+                </nav>
+
+                <div className="mt-2 flex items-center justify-between border-t border-sand px-4 pt-4">
+                  <p className="text-[12px] text-ink/50">
+                    ESENEL — Fleur Atelier
+                    <br />
+                    Fresh flowers, thoughtfully arranged.
+                  </p>
                   <button
-                    type="button"
-                    onClick={() => setMobileView('main')}
-                    className="flex items-center gap-2 rounded-full bg-sand/50 px-4 py-2 text-[13px] font-medium tracking-nav hover:bg-sand transition-colors"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      setIsOpen(true);
+                    }}
+                    aria-label="Open bag"
+                    className="relative rounded-full bg-ink text-cloud p-3"
                   >
-                    <ArrowLeft size={15} />
-                    ALL MENU
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMobileOpen(false)}
-                    aria-label="Close menu"
-                    className="p-2 rounded-full hover:bg-sand/50 transition-colors"
-                  >
-                    <X size={18} />
+                    <ShoppingBag size={17} strokeWidth={1.75} />
+                    {count > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-earth text-white text-[10px] leading-none rounded-full w-4 h-4 flex items-center justify-center">
+                        {count}
+                      </span>
+                    )}
                   </button>
                 </div>
-              )}
-
-              <div className="flex w-full flex-col gap-5 overflow-y-auto px-2 pb-6">
-                {mobileView === 'main' ? (
-                  <>
-                    <nav className="flex flex-col gap-1">
-                      {mobileItems.map((item) =>
-                        item.view ? (
-                          <button
-                            key={item.label}
-                            type="button"
-                            onClick={() => setMobileView(item.view)}
-                            className="flex w-full items-center justify-between gap-3 px-4 py-4 rounded-2xl hover:bg-sand/40 transition-colors"
-                          >
-                            <div className="flex items-baseline gap-3">
-                              <span className="text-[10px] text-earth/60 tabular-nums">
-                                {String(item.number).padStart(2, '0')}
-                              </span>
-                              <span className="font-display text-2xl leading-none">
-                                {item.label}
-                              </span>
-                            </div>
-                            <ArrowRight size={17} className="text-earth" />
-                          </button>
-                        ) : (
-                          <Link
-                            key={item.label}
-                            href={item.href}
-                            onClick={() => setMobileOpen(false)}
-                            className="group flex w-full items-center justify-between gap-3 px-4 py-4 rounded-2xl hover:bg-sand/40 transition-colors"
-                          >
-                            <div className="flex items-baseline gap-3">
-                              <span className="text-[10px] text-earth/60 tabular-nums">
-                                {String(item.number).padStart(2, '0')}
-                              </span>
-                              <span className="font-display text-2xl leading-none">
-                                {item.label}
-                              </span>
-                            </div>
-                          </Link>
-                        ),
-                      )}
-                    </nav>
-
-                    <div className="mt-2 flex items-center justify-between border-t border-sand px-4 pt-4">
-                      <p className="text-[12px] text-ink/50">
-                        ESENEL — Fleur Atelier
-                        <br />
-                        Fresh flowers, thoughtfully arranged.
-                      </p>
-                      <button
-                        onClick={() => {
-                          setMobileOpen(false);
-                          setIsOpen(true);
-                        }}
-                        aria-label="Open bag"
-                        className="relative rounded-full bg-ink text-cloud p-3"
-                      >
-                        <ShoppingBag size={17} strokeWidth={1.75} />
-                        {count > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-earth text-white text-[10px] leading-none rounded-full w-4 h-4 flex items-center justify-center">
-                            {count}
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="px-5 pt-2 text-[11px] tracking-nav text-ink/40 font-medium">
-                      COLLECTIONS
-                    </p>
-
-                    {collectionGroups.map((group) => (
-                      <div key={group.heading} className="flex flex-col gap-4">
-                        <span className="pl-5 text-[12px] tracking-[0.08em] text-ink/50 font-medium">
-                          {group.heading.toUpperCase()}
-                        </span>
-                        <div className="grid grid-cols-2 gap-2">
-                          {group.items.map((item) => (
-                            <Link
-                              key={item.slug}
-                              href={`/collections/${item.slug}`}
-                              onClick={() => setMobileOpen(false)}
-                              className="flex flex-col gap-3 p-3 pb-4 rounded-2xl bg-sand/30 hover:bg-sand transition-colors"
-                            >
-                              <div className="aspect-square rounded-xl overflow-hidden bg-white">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={collectionImages[item.slug]}
-                                  alt={item.label}
-                                  className="h-full w-full object-cover"
-                                />
-                              </div>
-                              <div className="flex flex-col gap-0.5 px-1.5">
-                                <span className="font-display text-base leading-none">
-                                  {item.label}
-                                </span>
-                                <span className="truncate text-[11px] text-ink/50">
-                                  {collectionCopy[item.slug]?.tagline}
-                                </span>
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-
-                    <Link
-                      href="/shop"
-                      onClick={() => setMobileOpen(false)}
-                      className="mx-1 mt-1 flex items-center justify-center gap-2 rounded-full bg-ink text-cloud px-4 py-3 text-[13px] font-medium tracking-nav"
-                    >
-                      VIEW ALL COLLECTIONS
-                      <ArrowRight size={14} />
-                    </Link>
-                  </>
-                )}
               </div>
             </motion.div>
           </>

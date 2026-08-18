@@ -1,14 +1,28 @@
 import './globals.css';
 import Chrome from '@/components/Chrome';
-import FlowerPullToRefresh from '@/components/ptr/FlowerPullToRefresh';
 import LenisProvider from '@/components/LenisProvider';
 import { CartProvider } from '@/components/cart/CartContext';
 import CartDrawer from '@/components/cart/CartDrawer';
 import ProgressiveBlur from '@/components/effects/ProgressiveBlur';
+import { SITE_URL, ogImage } from '@/lib/site';
 
 export const metadata = {
+  metadataBase: new URL(SITE_URL),
   title: 'ESENEL — Fleur Atelier',
   description: 'Fresh flowers, thoughtfully arranged. ESENEL is a contemporary fleur atelier.',
+  openGraph: {
+    siteName: 'ESENEL',
+    title: 'ESENEL — Fleur Atelier',
+    description: 'Fresh flowers, thoughtfully arranged. ESENEL is a contemporary fleur atelier.',
+    type: 'website',
+    images: [ogImage('home')],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ESENEL — Fleur Atelier',
+    description: 'Fresh flowers, thoughtfully arranged.',
+    images: [ogImage('home')],
+  },
   icons: {
     icon: [
       { url: '/favicon_io/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
@@ -60,10 +74,6 @@ export default function RootLayout({ children }) {
             />
             <Chrome>{children}</Chrome>
             <CartDrawer />
-            {/* Custom pull-to-refresh — mobile only. Mematikan native PTR
-                browser dan memastikan preloader kata hanya muncul di awal
-                (reload dari PTR ditandai di sessionStorage). */}
-            <FlowerPullToRefresh />
           </CartProvider>
         </LenisProvider>
       </body>

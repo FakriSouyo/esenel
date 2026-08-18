@@ -4,7 +4,17 @@ import JournalGrid from '@/components/journal/JournalGrid';
 import NewsletterForm from '@/components/journal/NewsletterForm';
 import { posts, journalCategories } from '@/data/journal';
 
-export const metadata = { title: 'Journal — ESENEL' };
+import { ogImage } from '@/lib/site';
+
+export const metadata = {
+  title: 'Journal — ESENEL',
+  description: 'Notes on flowers, craft, and quiet living.',
+  openGraph: {
+    title: 'Journal — ESENEL',
+    description: 'Notes on flowers, craft, and quiet living.',
+    images: [ogImage('journal')],
+  },
+};
 
 export default function JournalPage() {
   const featured = posts.filter((p) => p.featured).slice(0, 4);

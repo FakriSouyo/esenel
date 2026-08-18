@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLenis } from 'lenis/react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Calculator, RotateCcw, ShoppingBag } from 'lucide-react';
+import { Link2, RotateCcw, ShoppingBag, ZoomIn } from 'lucide-react';
 import { products } from '@/data/products';
 import { normalizeName } from '@/lib/nameNormalize';
 import { estimateBouquetPrice } from '@/lib/flowerPrices';
@@ -18,9 +18,10 @@ import FlowerPriceList from '@/components/craft/FlowerPriceList';
 const DIRECT_ITEM_KEY = 'esenel.directItem.v1';
 import ScrambleText, { SCRAMBLE_MS } from '@/components/craft/ScrambleText';
 import GeneratedImage from '@/components/craft/GeneratedImage';
-import ShareResultButtons from '@/components/craft/ShareResult';
+import ShareCardDialog from '@/components/craft/ShareCardDialog';
 
 const EASE = [0.16, 1, 0.3, 1];
+const SPRING_LAYOUT = { type: 'spring', stiffness: 360, damping: 32, mass: 0.6 };
 
 // Irama pelan & jelas — reveal blur per kata harus sempat terlihat sebelum
 // scroll pindah ke section berikutnya.
@@ -139,14 +140,66 @@ export default function NameStory({ story, onRestart }) {
   const [genImgLoaded, setGenImgLoaded] = useState(false);
   const locked = genStatus === 'queued' || genStatus === 'generating' || genStatus === 'refining';
 
-  // CEK HARGA: rincian harga bunga muncul dulu, CHECKOUT baru muncul setelahnya.
-  const [priceRevealed, setPriceRevealed] = useState(false);
+  // Rincian harga langsung tampil (collapsible); dialog perbesar gambar.
   const [priceOpen, setPriceOpen] = useState(true);
+  const [imgOpen, setImgOpen] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const hasImage = Boolean((imageUrl && !imgFailed) || similar[0]);
+  const priceRef = useRef(null);
+
+  // Salin link halaman hasil generate — OG image dinamis menampilkan nama
+  // buket + deskripsi, dan penerima link langsung melihat story auto-play.
+  const copyLink = useCallback(async () => {
+    const url = `${window.location.origin}/craft/name/${encodeURIComponent(nameKey)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2200);
+      return;
+    } catch {
+      // fallback input tersembunyi
+    }
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2200);
+    } catch {
+      // clipboard tidak tersedia
+    }
+    ta.remove();
+  }, [nameKey]);
 
   // Section yang sudah benar-benar tiba (scroll selesai). Scramble & generate
   // menunggu ini supaya animasinya terlihat saat halaman sampai, bukan
   // sudah selesai duluan sebelum user sempat melihat.
   const [arrived, setArrived] = useState(null);
+
+  // Saat tiba di section selesai, scroll halus ke rincian harga — baris
+  // muncul satu-satu (animasi Citations), jadi user bisa melihatnya langsung
+  // tanpa harus scroll manual.
+  useEffect(() => {
+    if (arrived !== FINAL) return;
+    const t = setTimeout(() => {
+      const el = priceRef.current;
+      if (!el) return;
+      if (lenis) {
+        lenis.scrollTo(el, {
+          offset: -100,
+          duration: 1.3,
+          easing: (x) => 1 - Math.pow(1 - x, 3),
+        });
+      } else {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [arrived, FINAL, lenis]);
 
   // Deteksi kedatangan section lewat IntersectionObserver (bukan estimasi
   // timer): reveal teks/bunga + timer advance baru mulai SETELAH section
@@ -219,21 +272,66 @@ export default function NameStory({ story, onRestart }) {
     return () => clearTimeout(t);
   }, [active, FINAL]);
 
+  // IKUTI REVEAL (streaming): selama teks / daftar bunga sedang di-reveal,
+  // halaman ikut scroll pelan supaya baris yang baru muncul selalu terbaca —
+  // di mobile, section yang lebih tinggi dari layar tidak lagi terpotong saat
+  // pindah ke section berikutnya. Berjalan dari posisi saat reveal mulai
+  // sampai bagian bawah section tepat saat reveal selesai (p = 1), lalu
+  // berhenti supaya jeda baca (SECTION_HOLD) bebas scroll manual.
+  // Untuk daftar bunga, lama scroll di-cap (FLOWERS_SCROLL_MS) supaya
+  // halaman tidak berjalan terlalu lambat di section yang tinggi.
+  const revealVisible = active === 0 || !!inView[active];
+  useEffect(() => {
+    if (active >= textSections.length) return; // hanya section 0..2
+    if (!revealVisible) return; // tunggu section tiba sebelum mengikuti
+    const el = refs.current[active];
+    if (!el) return;
+    const s = textSections[active];
+    const revealTotal = s?.text
+      ? s.text.split(' ').length * WORD_MS
+      : flowersSectionMs(s?.items || []);
+    const total = s?.text ? revealTotal : Math.min(revealTotal, FLOWERS_SCROLL_MS);
+    if (total <= 0) return;
+    const startY = window.scrollY;
+    const step = 340; // interval langkah scroll (ms)
+    const started = performance.now();
+    let timer;
+    const tick = () => {
+      const p = Math.min(1, (performance.now() - started) / total);
+      const viewportH = window.innerHeight || 1;
+      const contentH = el.offsetHeight;
+      const finalY = el.offsetTop + Math.max(0, contentH - viewportH);
+      const target = startY + (finalY - startY) * p;
+      if (lenis) {
+        lenis.scrollTo(target, { duration: step / 1000, easing: (x) => x });
+      } else {
+        window.scrollTo({ top: target, behavior: 'smooth' });
+      }
+      if (p >= 1) clearInterval(timer);
+    };
+    tick();
+    timer = setInterval(tick, step);
+    return () => clearInterval(timer);
+  }, [active, revealVisible, textSections, lenis]);
+
   // Section teks (0-1) maju otomatis SETELAH animasinya selesai. Timer mulai
   // hanya saat section sudah benar-benar terlihat (inView) — durasinya
   // words × WORD_MS + SECTION_HOLD, jadi teks panjang diberi waktu baca
   // yang proporsional dan tidak pernah kepotong saat scroll belum sampai.
+  // Depends on boolean `textVisible` (bukan objek inView) supaya timer tidak
+  // ter-reset saat section LAIN masuk/keluar viewport.
+  const textVisible = active === 0 || !!inView[active];
   useEffect(() => {
     if (active >= textSections.length || active >= 2) return;
     const s = textSections[active];
     if (!s?.text) return;
-    if (active > 0 && !inView[active]) return; // tunggu scroll tiba dulu
+    if (!textVisible) return; // tunggu scroll tiba dulu
     const t = setTimeout(
       () => handleDone(),
       s.text.split(' ').length * WORD_MS + SECTION_HOLD
     );
     return () => clearTimeout(t);
-  }, [active, textSections, inView, handleDone]);
+  }, [active, textSections, textVisible, handleDone]);
 
   // Section nama buket (3): tunggu scroll tiba, baru scramble dimulai dan
   // setelah settle lalu pindah ke generate.
@@ -292,6 +390,24 @@ export default function NameStory({ story, onRestart }) {
     const t = setTimeout(handleDone, 900);
     return () => clearTimeout(t);
   }, [genStatus, genImgLoaded, handleDone]);
+
+  // Dialog perbesar gambar: Escape menutup dialog. Saat dialog terbuka,
+  // tandai <body> supaya Escape halaman /craft (kembali ke /craft) tidak
+  // ikut jalan — tutup gambarnya dulu, baru keluar halaman.
+  useEffect(() => {
+    try {
+      if (imgOpen) document.body.dataset.esenelDialog = 'open';
+      else delete document.body.dataset.esenelDialog;
+    } catch {
+      // abaikan
+    }
+    if (!imgOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setImgOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [imgOpen]);
 
   // Saat generate: blokir scroll KE BAWAH manual (tetap bisa ke atas untuk
   // membaca ulang). Lenis v1.3 skip event yang punya `lenisStopPropagation`,
@@ -472,67 +588,79 @@ export default function NameStory({ story, onRestart }) {
           </p>
 
           {/* Gambar hasil generate (dari Supabase Storage) — kecil, jadi
-              heading + tombol CHECKOUT terlihat tanpa scroll. */}
-          <div className="relative mx-auto mt-6 aspect-square w-40 overflow-hidden rounded-2xl bg-sand/40 md:w-48">
-            {imageUrl && !imgFailed ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={imageUrl}
-                alt={`Buket ${story.namaBuket || story.nama}`}
-                onError={() => setImgFailed(true)}
-                className="h-full w-full object-cover"
-              />
-            ) : similar[0] ? (
-              <Image
-                src={similar[0].image}
-                alt={story.namaBuket || story.nama}
-                fill
-                sizes="(min-width: 768px) 28rem, 90vw"
-                className="object-cover"
-              />
-            ) : (
+              heading + tombol CHECKOUT terlihat tanpa scroll. Klik untuk
+              membuka dialog perbesar. */}
+          {hasImage ? (
+            <button
+              type="button"
+              onClick={() => setImgOpen(true)}
+              aria-label="Perbesar gambar buket"
+              className="group relative mx-auto mt-6 block aspect-square w-40 overflow-hidden rounded-2xl bg-sand/40 md:w-48"
+            >
+              {imageUrl && !imgFailed ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={imageUrl}
+                  alt={`Buket ${story.namaBuket || story.nama}`}
+                  onError={() => setImgFailed(true)}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+              ) : (
+                <Image
+                  src={similar[0].image}
+                  alt={story.namaBuket || story.nama}
+                  fill
+                  sizes="(min-width: 768px) 28rem, 90vw"
+                  className="object-cover"
+                />
+              )}
+              <span className="absolute bottom-2 right-2 grid size-7 place-items-center rounded-full bg-ink/55 text-cloud opacity-0 backdrop-blur transition-opacity duration-300 group-hover:opacity-100">
+                <ZoomIn size={14} />
+              </span>
+            </button>
+          ) : (
+            <div className="relative mx-auto mt-6 aspect-square w-40 overflow-hidden rounded-2xl bg-sand/40 md:w-48">
               <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-meadow via-sky to-sand">
                 <span className="select-none font-display text-[8rem] leading-none text-cloud/70">✿</span>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* CEK HARGA → rincian harga bunga (animasi) → baru CHECKOUT muncul */}
-          <div className="mt-6 flex w-full flex-col items-center">
-            {!priceRevealed ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setPriceRevealed(true);
-                  setPriceOpen(true);
-                }}
-                className="inline-flex items-center gap-2 rounded-pill bg-ink px-7 py-3.5 text-[12px] font-medium tracking-nav text-cloud transition-colors hover:bg-ink/90"
-              >
-                <Calculator size={14} />
-                CEK HARGA BUKET
-              </button>
-            ) : (
+          {/* Rincian harga bunga — langsung tampil (bisa di-collapse lewat
+              header), item muncul satu-satu saat user tiba di section selesai
+              (arrived === FINAL). Saat mulai, halaman auto-scroll ke sini
+              supaya animasi satu-satu terlihat. */}
+          <div ref={priceRef} className="mt-6 flex w-full flex-col items-center scroll-mt-24">
+            {arrived === FINAL && (
               <FlowerPriceList story={story} open={priceOpen} onOpenChange={setPriceOpen} />
             )}
           </div>
 
           {/* Tombol kecil — muat sejajar di satu baris */}
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            {priceRevealed && (
-              <button
-                type="button"
-                onClick={handleCheckout}
-                className="inline-flex items-center gap-1.5 rounded-pill bg-ink px-4 py-2 text-[11px] font-medium tracking-nav text-cloud transition-colors hover:bg-ink/90"
-              >
-                <ShoppingBag size={13} />
-                CHECKOUT
-              </button>
-            )}
-            <ShareResultButtons
+            <button
+              type="button"
+              onClick={handleCheckout}
+              className="inline-flex items-center gap-1.5 rounded-pill bg-ink px-4 py-2 text-[11px] font-medium tracking-nav text-cloud transition-colors hover:bg-ink/90"
+            >
+              <ShoppingBag size={13} />
+              CHECKOUT
+            </button>
+            <ShareCardDialog
               story={story}
-              imageUrl={imageUrl}
-              fallbackImage={similar[0]?.image}
+              imageSrc={hasImage ? (imageUrl && !imgFailed ? imageUrl : similar[0]?.image) : null}
+              imageAlt={`Buket ${story.namaBuket || story.nama}`}
+              nameKey={nameKey}
             />
+            <button
+              type="button"
+              onClick={copyLink}
+              aria-label="Salin link hasil generate"
+              className="inline-flex items-center gap-1.5 rounded-pill border border-ink/20 px-4 py-2 text-[11px] font-medium tracking-nav text-ink/70 transition-colors hover:border-ink/45 hover:text-ink"
+            >
+              <Link2 size={13} />
+              {linkCopied ? 'LINK DISALIN!' : 'SALIN LINK'}
+            </button>
             <button
               type="button"
               onClick={onRestart}
@@ -558,30 +686,101 @@ export default function NameStory({ story, onRestart }) {
           )}
         </div>
       </section>
+
+      {/* Dialog perbesar gambar buket — klik thumbnail untuk membuka,
+          tutup lewat ✕, klik di luar, atau Escape. */}
+      {imgOpen && (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-ink/60 p-4 backdrop-blur-sm"
+          onClick={() => setImgOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Buket ${story.namaBuket || story.nama}`}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg overflow-hidden rounded-3xl bg-cloud p-3 shadow-2xl"
+          >
+            <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-sand/40">
+              {imageUrl && !imgFailed ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={imageUrl}
+                  alt={`Buket ${story.namaBuket || story.nama}`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Image
+                  src={similar[0].image}
+                  alt={story.namaBuket || story.nama}
+                  fill
+                  sizes="(min-width: 768px) 32rem, 92vw"
+                  className="object-cover"
+                />
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3 px-1 pt-3">
+              <div className="min-w-0 text-left">
+                <p className="truncate font-display text-lg tracking-[-0.01em] text-ink">
+                  {story.namaBuket || story.nama}
+                </p>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-ink/40">
+                  ESENEL · buket personal
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImgOpen(false)}
+                aria-label="Tutup"
+                className="grid size-9 shrink-0 place-items-center rounded-full bg-ink/5 text-ink/60 transition-colors hover:bg-ink/10 hover:text-ink"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
 
-/** Irama section bunga — alasan di-blur lebih cepat (REASON_WORD_MS) supaya
- *  item tidak menumpuk jadi puluhan detik; item di-grid 2 kolom biar muat
- *  satu layar dan semua reveal terlihat. Durasi tetap di-cap biar tidak
- *  pernah terasa stuck walau DeepSeek mengirim 8 bunga dengan alasan panjang. */
-const ITEM_STAGGER = 700; // jeda antar item (ms)
-const ITEM_HOLD = 600; // jeda setelah alasan satu item selesai (ms)
-const REASON_WORD_MS = 55; // kata/detik untuk alasan (lebih cepat dari nama)
-const FLOWERS_SECTION_MAX = 26000; // cap total durasi section bunga (ms)
+/** Irama section bunga — gaya "Citations" (beui): baris MASUK SATU-SATU lewat
+ *  state `visible` (bukan stagger delay statis), tiap baris memantul masuk
+ *  dengan spring dan baris di bawahnya meluncur turun (layout spring) —
+ *  konsisten dengan rincian harga di section selesai. */
+const MOUNT_BASE = 400; // ms sebelum baris pertama masuk
+const MOUNT_STEP = 480; // jeda antar baris (baris baru muncul satu-satu)
+const ROW_REVEAL_MS = 700; // waktu blur nama + alasan dalam satu baris setelah muncul
+const ITEM_HOLD = 150; // jeda setelah reveal terakhir sebelum pindah
+const REASON_WORD_MS = 14; // kata/detik untuk alasan (blur cepat, tidak menahan section)
+const FLOWERS_SCROLL_MS = 20000; // follow-scroll bunga sinkron penuh dengan reveal
+const FLOWERS_SECTION_MAX = 14000; // cap total durasi section bunga (ms)
+
+/** Durasi reveal total section bunga (ms) — dipakai timer maju SectionItems
+ *  DAN follow-scroll reveal supaya keduanya selalu sinkron (scroll selesai
+ *  tepat saat reveal selesai). Diambil dari jadwal mount: baris terakhir
+ *  muncul di MOUNT_BASE + (n-1)*MOUNT_STEP, lalu isi barisnya di-blur selama
+ *  ROW_REVEAL_MS, ditutup jeda baca ITEM_HOLD. */
+function flowersSectionMs(items) {
+  if (!items.length) return 0;
+  const lastMount = MOUNT_BASE + (items.length - 1) * MOUNT_STEP;
+  return Math.min(lastMount + ROW_REVEAL_MS + ITEM_HOLD, FLOWERS_SECTION_MAX);
+}
 
 function SectionItems({ items, active, onDone }) {
-  const totalMs = useMemo(() => {
-    let acc = 1600;
-    items.forEach((it, idx) => {
-      const nameMs = it.nama.split(' ').length * WORD_MS;
-      const reasonMs = it.alasan.split(' ').length * REASON_WORD_MS;
-      acc += Math.max(nameMs, reasonMs) + ITEM_HOLD;
-      if (idx < items.length - 1) acc += ITEM_STAGGER;
-    });
-    return Math.min(acc, FLOWERS_SECTION_MAX);
-  }, [items]);
+  const reduce = useReducedMotion() ?? false;
+  const totalMs = useMemo(() => flowersSectionMs(items), [items]);
+  const [visible, setVisible] = useState(0);
+
+  // Baris muncul satu-satu saat section tiba (active). Kalau user kembali ke
+  // section, baris tetap utuh — tidak vanish di tengah layar.
+  useEffect(() => {
+    if (!active) return;
+    const timers = items.map((_, idx) =>
+      setTimeout(() => setVisible(idx + 1), MOUNT_BASE + idx * MOUNT_STEP)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [active, items]);
 
   useEffect(() => {
     if (!active) return;
@@ -591,51 +790,70 @@ function SectionItems({ items, active, onDone }) {
 
   return (
     <div className="grid gap-x-12 gap-y-7 sm:grid-cols-2">
-      {items.map((it, idx) => {
-        const start = idx * (ITEM_STAGGER / 1000);
-        return (
-          <div key={it.nama} className="flex items-baseline gap-4">
-            <span
-              className={`shrink-0 font-display text-sm text-ink/35 transition-opacity duration-500 md:text-base ${
-                active ? 'opacity-100' : 'opacity-40'
-              }`}
-            >
-              {String(idx + 1).padStart(2, '0')}
-            </span>
-            <div>
-              <BlurWords
-                text={it.nama}
-                active={active}
-                delay={start}
-                className="font-display text-xl leading-snug tracking-[-0.01em] text-ink md:text-2xl"
-              />
-              <p className="mt-1 max-w-md text-[13px] leading-relaxed text-ink/55 md:text-sm">
-                {it.alasan.split(' ').map((w, i) =>
-                  active ? (
-                    <motion.span
-                      key={i}
-                      initial={{ opacity: 0, filter: 'blur(8px)' }}
-                      animate={{ opacity: 1, filter: 'blur(0px)' }}
-                      transition={{
-                        duration: 0.4,
-                        delay: start + 0.3 + i * (REASON_WORD_MS / 1000),
-                        ease: EASE,
-                      }}
-                      className="mr-[0.3em] inline-block"
-                    >
-                      {w}
-                    </motion.span>
-                  ) : (
-                    <span key={i} className="mr-[0.3em] inline-block">
-                      {w}
-                    </span>
-                  )
-                )}
+      {items.slice(0, visible).map((it, idx) => (
+        <motion.div
+          layout="position"
+          key={it.nama}
+          initial={reduce ? { opacity: 1 } : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={
+            reduce
+              ? { duration: 0 }
+              : {
+                  opacity: { duration: 0.25, ease: EASE },
+                  y: SPRING_LAYOUT,
+                  layout: SPRING_LAYOUT,
+                }
+          }
+          className="flex items-baseline gap-4"
+        >
+          <span
+            className={`shrink-0 font-display text-sm text-ink/35 transition-opacity duration-500 md:text-base ${
+              active ? 'opacity-100' : 'opacity-40'
+            }`}
+          >
+            {String(idx + 1).padStart(2, '0')}
+          </span>
+          <div>
+            {/* Nama puitis (1 kata dari 5 bahasa, makna bunga) tampil besar;
+                nama bunga aslinya jadi label kecil di bawahnya. */}
+            <BlurWords
+              text={it.namaPuitis || it.nama}
+              active={active}
+              delay={0.15}
+              className="font-display text-xl leading-snug tracking-[-0.01em] text-earth md:text-2xl"
+            />
+            {it.namaPuitis && it.namaPuitis !== it.nama && (
+              <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-ink/40">
+                {it.nama}
               </p>
-            </div>
+            )}
+            <p className="mt-1 max-w-md text-[13px] leading-relaxed text-ink/55 md:text-sm">
+              {it.alasan.split(' ').map((w, i) =>
+                active ? (
+                  <motion.span
+                    key={i}
+                    initial={{ opacity: 0, filter: 'blur(8px)' }}
+                    animate={{ opacity: 1, filter: 'blur(0px)' }}
+                    transition={{
+                      duration: 0.4,
+                      delay: 0.35 + i * (REASON_WORD_MS / 1000),
+                      ease: EASE,
+                    }}
+                    className="mr-[0.3em] inline-block"
+                  >
+                    {w}
+                  </motion.span>
+                ) : (
+                  <span key={i} className="mr-[0.3em] inline-block">
+                    {w}
+                  </span>
+                )
+              )}
+            </p>
           </div>
-        );
-      })}
+        </motion.div>
+      ))}
     </div>
   );
 }

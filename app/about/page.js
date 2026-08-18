@@ -4,7 +4,17 @@ import { Sprout, Hand, Flower2, MapPin } from 'lucide-react';
 import RollingWords from '@/components/about/RollingWords';
 import BentoShowcase from '@/components/about/BentoShowcase';
 
-export const metadata = { title: 'About — ESENEL' };
+import { ogImage } from '@/lib/site';
+
+export const metadata = {
+  title: 'About — ESENEL',
+  description: 'The atelier and the hands behind the blooms.',
+  openGraph: {
+    title: 'About — ESENEL',
+    description: 'The atelier and the hands behind the blooms.',
+    images: [ogImage('about')],
+  },
+};
 
 const values = [
   {

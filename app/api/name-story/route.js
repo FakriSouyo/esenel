@@ -18,6 +18,8 @@ import {
 } from '@/lib/nameStoryPrompt';
 import { getDummyStory } from '@/lib/nameStoryDummy';
 import { enforceImagePrompt } from '@/lib/nameStoryImage';
+import { ensureUniqueBouquetName, pickBouquetName } from '@/lib/bouquetNames';
+import { enrichFlowerNames } from '@/lib/flowerPoeticNames';
 import { getCachedNameStory, saveNameStoryCache } from '@/lib/supabase';
 import { products } from '@/data/products';
 
@@ -40,11 +42,27 @@ export async function POST(req) {
   // 1) cache Supabase — nama yang sama tidak perlu di-generate ulang.
   try {
     const cached = await getCachedNameStory(key);
-    if (cached && cached.story) {
-      // imagePrompt lama (sebelum aturan "semua bunga") ikut diperkuat di sini,
-      // jadi story hasil cache pun tetap menyebut semua bunga kecocokan.
+    const cs = cached && cached.story;
+    // Story cache yang rusak / kosong / dari prompt lama yang belum punya
+    // field wajib dianggap miss → di-generate ulang dengan aturan terbaru.
+    const cacheOk =
+      cs &&
+      typeof cs === 'object' &&
+      typeof cs.artiNama === 'string' &&
+      cs.artiNama &&
+      typeof cs.maknaNama === 'string' &&
+      cs.maknaNama &&
+      Array.isArray(cs.bunga) &&
+      cs.bunga.length > 0;
+    if (cacheOk) {
+      // imagePrompt lama ikut diperkuat + nama buket dicek keunikan di sini,
+      // jadi story hasil cache pun tetap mengikuti aturan terbaru. Cache lama
+      // yang belum punya namaPuitis bunga ikut di-enrich dari kamus.
+      const story = enforceImagePrompt(cached.story);
+      ensureUniqueBouquetName(story, name, CATALOG_NAMES);
+      enrichFlowerNames(story);
       return NextResponse.json({
-        story: enforceImagePrompt(cached.story),
+        story,
         name: cached.name || name,
         cached: true,
         source: 'cache',
@@ -81,9 +99,17 @@ export async function POST(req) {
         const story = parseStoryResponse(raw);
         if (story) {
           story.nama = story.nama || name;
-          story.namaBuket = story.namaBuket || CATALOG_NAMES[0] || 'ESENEL';
-          // Pastikan imagePrompt menyebut SEMUA bunga kecocokan, bukan ringkasan.
+          // Nama buket harus unik: tidak boleh nama katalog / nama input.
+          ensureUniqueBouquetName(story, name, CATALOG_NAMES);
+          if (!story.namaBuket) {
+            story.namaBuket = pickBouquetName(name, {
+              exclude: [name, ...CATALOG_NAMES],
+            });
+          }
+          // Pastikan imagePrompt menyebut SEMUA bunga kecocokan, bukan ringkasan,
+          // dan tiap bunga punya nama puitis 1 kata (jaring pengaman AI).
           enforceImagePrompt(story);
+          enrichFlowerNames(story);
           try {
             await saveNameStoryCache(key, name, story);
           } catch {
@@ -105,6 +131,8 @@ export async function POST(req) {
   // 3) fallback dummy (belum ada key, atau DeepSeek gagal).
   const story = getDummyStory(name, CATALOG_NAMES);
   story.nama = name;
+  ensureUniqueBouquetName(story, name, CATALOG_NAMES);
   enforceImagePrompt(story);
+  enrichFlowerNames(story);
   return NextResponse.json({ story, name, cached: false, source: 'dummy' });
 }

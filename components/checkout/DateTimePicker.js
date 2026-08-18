@@ -20,7 +20,7 @@ function formatSummary(datetimeLocal) {
   if (!datetimeLocal) return '';
   const [datePart, timePart] = String(datetimeLocal).split('T');
   const d = new Date(`${datePart}T00:00:00`);
-  const day = d.toLocaleDateString('id-ID', {
+  const day = d.toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -84,7 +84,7 @@ export default function DateTimePicker({ value = '', onChange }) {
         className="flex w-full items-center gap-3 rounded-pill border border-sand bg-white px-5 py-3.5 text-left text-sm text-ink transition-colors hover:border-ink/40 focus:border-ink focus:outline-none"
       >
         <CalendarIcon size={16} aria-hidden="true" className="shrink-0 text-ink/40" />
-        <span className={summary ? 'text-ink' : 'text-ink/35'}>{summary || 'Pilih tanggal & jam ambil/kirim'}</span>
+        <span className={summary ? 'text-ink' : 'text-ink/35'}>{summary || 'Choose pickup/delivery date & time'}</span>
       </button>
 
       {open && (
@@ -95,20 +95,20 @@ export default function DateTimePicker({ value = '', onChange }) {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Pilih tanggal & jam"
+            aria-label="Choose date & time"
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-2xl overflow-hidden rounded-3xl bg-cloud shadow-2xl"
           >
             {/* Header */}
             <div className="flex h-max items-center justify-between border-b border-sand px-6 py-4">
               <div>
-                <p className="font-display text-xl leading-tight">Pilih tanggal &amp; jam</p>
-                <p className="mt-0.5 text-xs text-ink/50">Ambil / kirim buket kamu</p>
+                <p className="font-display text-xl leading-tight">Choose date &amp; time</p>
+                <p className="mt-0.5 text-xs text-ink/50">Pick up or deliver your bouquet</p>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                aria-label="Tutup"
+                aria-label="Close"
                 className="rounded-full p-2 text-ink/60 transition-colors hover:bg-sand/60 hover:text-ink"
               >
                 ✕
@@ -129,7 +129,7 @@ export default function DateTimePicker({ value = '', onChange }) {
               </div>
               <div className="flex flex-col gap-2 border-t border-sand pt-4 md:absolute md:inset-y-0 md:right-0 md:w-48 md:border-l md:border-t-0 md:pt-0">
                 <p className="flex items-center gap-2 px-6 pt-4 text-[12px] tracking-nav text-ink/50 md:px-4 md:pt-5">
-                  <ClockIcon size={14} aria-hidden="true" /> WAKTU
+                  <ClockIcon size={14} aria-hidden="true" /> TIME
                 </p>
                 <div className="max-h-48 overflow-y-auto px-4 pb-5 md:max-h-none md:flex-1">
                   <div className="flex flex-col gap-2">
@@ -157,11 +157,11 @@ export default function DateTimePicker({ value = '', onChange }) {
               <p className="text-sm text-ink/70">
                 {ready ? (
                   <>
-                    Jadwal:{' '}
+                    Schedule:{' '}
                     <span className="font-medium text-ink">{pendingSummary.replace(' · 00:00', '')}</span>
                   </>
                 ) : (
-                  'Pilih tanggal dan jam untuk melanjutkan.'
+                  'Pick a date and time to continue.'
                 )}
               </p>
               <div className="flex gap-2">
@@ -170,7 +170,7 @@ export default function DateTimePicker({ value = '', onChange }) {
                   onClick={() => setOpen(false)}
                   className="rounded-pill border border-sand bg-white px-5 py-2.5 text-[12px] font-medium tracking-nav text-ink/70 transition-colors hover:bg-sand/50"
                 >
-                  BATAL
+                  CANCEL
                 </button>
                 <button
                   type="button"
@@ -178,7 +178,7 @@ export default function DateTimePicker({ value = '', onChange }) {
                   onClick={save}
                   className="rounded-pill bg-ink px-6 py-2.5 text-[12px] font-medium tracking-nav text-cloud transition-colors hover:bg-ink/90 disabled:opacity-40"
                 >
-                  SIMPAN
+                  SAVE
                 </button>
               </div>
             </div>

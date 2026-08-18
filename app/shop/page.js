@@ -4,7 +4,17 @@ import CollectionGallery from '@/components/collections/CollectionGallery';
 import { collectionCopy } from '@/data/collections';
 import { getProductsByCategory } from '@/data/products';
 
-export const metadata = { title: 'Collection — ESENEL' };
+import { ogImage } from '@/lib/site';
+
+export const metadata = {
+  title: 'Collection — ESENEL',
+  description: 'Arrangements and collections, gathered by season.',
+  openGraph: {
+    title: 'Collection — ESENEL',
+    description: 'Arrangements and collections, gathered by season.',
+    images: [ogImage('shop')],
+  },
+};
 
 const order = ['small', 'medium', 'large', 'extra-large', 'vase', 'flower-board', 'custom'];
 

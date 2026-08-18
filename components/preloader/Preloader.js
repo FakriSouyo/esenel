@@ -11,6 +11,11 @@ const isNotFoundPage = () =>
   typeof document !== "undefined" &&
   document.body.classList.contains("route-notfound");
 
+// Preloader hanya main SEKALI per sesi tab: flag ini di-set saat greeting
+// selesai, jadi kembali ke home dari halaman lain tidak memutar preloader
+// lagi (langsung ke hero).
+const PRELOADER_DONE_KEY = "esenel.preloaderDone.v1";
+
 /**
  * ESENEL preloader — a Skiper8-style "word preloader" (Hello in 9 languages,
  * dead center) rendered as the FIRST SECTION of the document.
@@ -90,18 +95,9 @@ export default function Preloader() {
       return;
     }
 
-    // Pull-to-refresh (FlowerPullToRefresh) memuat ulang halaman — lewati
-    // animasi kata supaya preloader TIDAK muncul lagi saat user menarik
-    // untuk refresh. Flag dihapus setelah dibaca, jadi kunjungan berikutnya
-    // (klik link / buka tab baru) tetap memutar preloader normal.
-    let ptrReload = false;
-    try {
-      ptrReload = sessionStorage.getItem("esenel.ptr") === "1";
-      if (ptrReload) sessionStorage.removeItem("esenel.ptr");
-    } catch {
-      // storage tidak tersedia — abaikan, preloader tetap normal
-    }
-    if (ptrReload) {
+    // Sudah pernah main di sesi ini (kembali ke home) — lewati total, tapi
+    // tetap beri sinyal exit supaya navbar tidak diam terkunci.
+    if (typeof window !== "undefined" && window.sessionStorage?.getItem(PRELOADER_DONE_KEY)) {
       setRemoved(true);
       if (!exitFiredRef.current) {
         exitFiredRef.current = true;
@@ -152,6 +148,13 @@ export default function Preloader() {
         if (done) return;
         done = true;
         clearInterval(watchdog);
+        // Preloader sudah tampil penuh — jangan main lagi saat kembali ke
+        // home dalam sesi tab yang sama.
+        try {
+          window.sessionStorage?.setItem(PRELOADER_DONE_KEY, "1");
+        } catch {
+          // private mode / storage penuh — abaikan, preloader tetap jalan
+        }
         // The section leaves the document, so the hero becomes the first
         // section. The scroll-back-to-top happens synchronously in a layout
         // effect (see above) — BEFORE the unmount frame paints — so the hero

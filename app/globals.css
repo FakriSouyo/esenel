@@ -39,15 +39,6 @@ body {
   color: #20221E;
 }
 
-/* Mobile: native pull-to-refresh browser dimatikan — digantikan custom
-   FlowerPullToRefresh (scrub video + perayaan bunga). Scroll biasa tetap
-   jalan; hanya overscroll-nya yang tidak memicu refresh bawaan. */
-@media (pointer: coarse) {
-  html {
-    overscroll-behavior-y: none;
-  }
-}
-
 /* 404 — the not-found page tags <body> with `route-notfound`; hide the
    global chrome (word preloader + navbar + footer) for as long as that
    class is set. The not-found page also ships its own inline <style> so the

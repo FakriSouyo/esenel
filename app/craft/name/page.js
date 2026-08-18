@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { ArrowLeft } from 'lucide-react';
 import { normalizeName } from '@/lib/nameNormalize';
 import { getDummyStory } from '@/lib/nameStoryDummy';
 import { products } from '@/data/products';
@@ -26,19 +27,20 @@ const CATALOG_NAMES = Array.from(new Set(products.map((p) => p.name)));
  * di .env.local), kalau tidak ada key jatuh ke dummy. Gambar lewat
  * POST /api/name-image.
  *
- * Resume: story terakhir disimpan di localStorage. Kalau user refresh,
- * halaman langsung balik ke story yang sama (data sama, dari cache
- * Supabase / dummy), bukan ke input — sampai tombol "Tulis nama lain"
- * ditekan, baru input muncul lagi. Tidak butuh JWT: ini data klien murni,
- * bukan data privat per akun.
+ * Riwayat: story TIDAK disimpan otomatis lagi (refetch dari cache Supabase
+ * cepat dan hasilnya selalu segar). Yang disimpan cuma daftar nama yang
+ * pernah dipakai (localStorage, kecil) untuk dropdown autocomplete di input
+ * — user tetap mengetik/memilih nama ulang, tidak pernah di-resume diam-diam.
  */
-const STORY_STORAGE_KEY = 'esenel.nameStory.v1';
+const HISTORY_KEY = 'esenel.nameHistory.v1';
 
 export default function NameBouquetPage() {
   const router = useRouter();
   const [stage, setStage] = useState('input'); // input | thinking | story
   const [name, setName] = useState('');
   const [story, setStory] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const inputRef = useRef(null);
 
   // Masuk ke alur nama = mulai fresh: buang buket nama yang belum jadi dari
@@ -51,26 +53,51 @@ export default function NameBouquetPage() {
     }
   }, []);
 
-  // Refresh → langsung resume story yang terakhir (kalau ada).
+  // Baca daftar nama yang pernah dipakai (hanya nama, bukan story).
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(STORY_STORAGE_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      if (saved?.story && saved?.name) {
-        setName(saved.name);
-        setStory(saved.story);
-        setStage('story');
+      const raw = window.localStorage.getItem(HISTORY_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(arr)) {
+        setHistory(arr.filter((x) => typeof x === 'string' && x.trim()).slice(0, 5));
       }
     } catch {
-      // storage korup → biarkan di input
+      // storage korup / private mode → tanpa riwayat
     }
   }, []);
 
-  // Escape = jalan keluar diam-diam (halaman ini tanpa navbar).
+  // Simpan nama ke riwayat setelah dipakai (dedupe, paling baru di depan).
+  const rememberName = (n) => {
+    const trimmed = String(n || '').trim();
+    if (!trimmed) return;
+    setHistory((prev) => {
+      const next = [
+        trimmed,
+        ...prev.filter((x) => x.toLowerCase() !== trimmed.toLowerCase()),
+      ].slice(0, 5);
+      try {
+        window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+      } catch {
+        // penyimpanan penuh / private mode — abaikan
+      }
+      return next;
+    });
+  };
+
+  // Escape = jalan keluar diam-diam (halaman ini tanpa navbar). Saat dialog
+  // perbesar gambar terbuka (data-attr di body), Escape hanya menutup dialog
+  // — jangan langsung keluar halaman.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape' && stage !== 'thinking') router.push('/craft');
+      let dialogOpen = false;
+      try {
+        dialogOpen = document.body.dataset.esenelDialog === 'open';
+      } catch {
+        // abaikan
+      }
+      if (e.key === 'Escape' && stage !== 'thinking' && !dialogOpen) {
+        router.push('/craft');
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -97,15 +124,7 @@ export default function NameBouquetPage() {
       story = null;
     }
     if (!story) story = getDummyStory(name.trim(), CATALOG_NAMES);
-    // Simpan hasilnya supaya refresh tidak mengulang dari input.
-    try {
-      window.localStorage.setItem(
-        STORY_STORAGE_KEY,
-        JSON.stringify({ name: name.trim(), story })
-      );
-    } catch {
-      // penyimpanan penuh / private mode — abaikan
-    }
+    rememberName(name);
     const wait = Math.max(0, 2200 - (Date.now() - started));
     setTimeout(() => {
       setStory(story);
@@ -113,57 +132,109 @@ export default function NameBouquetPage() {
     }, wait);
   }
 
-  if (stage === 'story' && story) {
-    return (
-      <NameStory
-        story={story}
-        onRestart={() => {
-          try {
-            window.localStorage.removeItem(STORY_STORAGE_KEY);
-            window.sessionStorage.removeItem('esenel.directItem.v1');
-          } catch {
-            // abaikan
-          }
-          setStory(null);
-          setName('');
-          setStage('input');
-        }}
-      />
-    );
-  }
-
   return (
-    <main className="flex min-h-screen flex-col justify-center bg-[#F8F9F5]">
+    <>
+      {/* Tombol kembali ke halaman craft — pojok kiri atas, selalu tampil
+          (input, thinking, maupun story). Halaman ini tanpa navbar, jadi
+          tombol ini dan Escape adalah jalan keluarnya. */}
+      <button
+        type="button"
+        onClick={() => router.push('/craft')}
+        aria-label="Kembali ke halaman craft"
+        className="fixed left-4 top-4 z-[80] grid size-10 place-items-center rounded-full border border-ink/10 bg-cloud/85 text-ink/70 backdrop-blur transition-colors hover:border-ink/30 hover:text-ink"
+      >
+        <ArrowLeft size={18} />
+      </button>
+
+      {stage === 'story' && story ? (
+        <NameStory
+          story={story}
+          onRestart={() => {
+            try {
+              window.sessionStorage.removeItem('esenel.directItem.v1');
+            } catch {
+              // abaikan
+            }
+            setStory(null);
+            setName('');
+            setStage('input');
+          }}
+        />
+      ) : (
+        <main className="flex min-h-screen flex-col justify-center bg-[#F8F9F5]">
       {stage === 'input' ? (
-        <div className="flex h-14 w-full items-center justify-end lg:h-[88px]">
-          <div className="ml-10 h-full w-full border-b border-ink/10 lg:w-[50vw]">
-            <form
-              onSubmit={handleSubmit}
-              className="relative mx-auto flex w-full items-center font-display text-4xl tracking-[-0.05em] text-ink lg:!text-6xl"
-            >
-              <label className="flex w-full items-center pr-2">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Tulis namamu…"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  maxLength={40}
-                  className="relative z-50 h-full w-full border-none bg-transparent pr-4 text-ink placeholder:text-ink/25 focus:outline-none focus:ring-0"
-                />
-                <button
-                  type="submit"
-                  aria-label="Kirim nama"
-                  className="flex h-full cursor-pointer items-center justify-center whitespace-nowrap pr-4 text-ink/60 transition-colors hover:text-ink"
-                >
-                  →
-                </button>
-              </label>
-            </form>
+        <div className="flex w-full flex-col items-end">
+          <div className="flex h-14 w-full items-center justify-end lg:h-[88px]">
+            <div className="ml-10 h-full w-full border-b border-ink/10 lg:w-[50vw]">
+              <form
+                onSubmit={handleSubmit}
+                className="relative mx-auto flex w-full items-center font-display text-4xl tracking-[-0.05em] text-ink lg:!text-6xl"
+              >
+                <label className="flex w-full items-center pr-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onFocus={() => setShowHistory(true)}
+                    onBlur={() =>
+                      // tunda sebentar supaya klik dropdown sempat kebaca
+                      setTimeout(() => setShowHistory(false), 180)
+                    }
+                    placeholder="Tulis namamu…"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    maxLength={40}
+                    className="relative z-50 h-full w-full border-none bg-transparent pr-4 text-ink placeholder:text-ink/25 focus:outline-none focus:ring-0"
+                  />
+                  <button
+                    type="submit"
+                    aria-label="Kirim nama"
+                    className="flex h-full cursor-pointer items-center justify-center whitespace-nowrap pr-4 text-ink/60 transition-colors hover:text-ink"
+                  >
+                    →
+                  </button>
+                </label>
+              </form>
+            </div>
           </div>
+
+          {/* Riwayat nama yang pernah dipakai — baris chip yang bisa digeser
+              ke samping di mobile (nama panjang tetap kebaca), klik untuk
+              mengisi ulang (story tetap di-fetch segar dari cache Supabase,
+              bukan resume). */}
+          {showHistory && history.length > 0 && (
+            <div className="ml-10 w-full lg:w-[50vw]">
+              <div className="pt-5">
+                <p className="text-[10px] tracking-[0.24em] font-medium uppercase text-ink/35">
+                  Namamu sebelumnya
+                </p>
+                <div
+                  className="no-scrollbar -mx-1 mt-2.5 flex gap-2 overflow-x-auto px-1 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  role="list"
+                >
+                  {history.map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      role="listitem"
+                      onMouseDown={(e) => e.preventDefault() /* jaga fokus input */}
+                      onClick={() => {
+                        setName(h);
+                        setShowHistory(false);
+                        inputRef.current?.focus();
+                      }}
+                      className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-ink/10 px-3.5 py-1.5 font-display text-sm tracking-[-0.02em] text-ink/55 transition-colors hover:border-ink/30 hover:text-ink"
+                    >
+                      <span className="text-[10px] text-ink/25">↳</span>
+                      {h}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex items-center justify-center">
@@ -180,7 +251,9 @@ export default function NameBouquetPage() {
             ))}
           </div>
         </div>
+          )}
+        </main>
       )}
-    </main>
+    </>
   );
 }
