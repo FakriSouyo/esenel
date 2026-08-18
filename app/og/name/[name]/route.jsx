@@ -62,8 +62,10 @@ export async function GET(request, { params }) {
   }
   if (!story) story = getDummyStory(key, CATALOG_NAMES);
 
-  const title = story.namaBuket || story.nama || 'Bouquet';
-  const tagline = `Bouquet personal untuk ${story.nama || key}`;
+  const title = story.nama || key || 'Bouquet';
+  const tagline = story.namaBuket
+    ? `"${story.namaBuket}" — buket personal dari namamu`
+    : `Bouquet personal untuk ${title}`;
   const accent = BRAND.meadow;
   const image = await loadOgImage(key);
 

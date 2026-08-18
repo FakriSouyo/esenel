@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { normalizeName } from '@/lib/nameNormalize';
 import { getCachedNameStory } from '@/lib/supabase';
 import { getDummyStory } from '@/lib/nameStoryDummy';
+import { OG_VERSION } from '@/lib/site';
 import { products } from '@/data/products';
 import NameSharePage from '@/components/craft/NameSharePage';
 
@@ -22,8 +23,10 @@ async function resolveStory(key) {
 export async function generateMetadata({ params }) {
   const key = normalizeName(params.name) || 'nama';
   const story = await resolveStory(key);
-  const title = story?.namaBuket || story?.nama || 'Bouquet';
-  const description = story?.nama ? `Bouquet personal untuk ${story.nama}` : 'Bouquet dari nama — ESENEL';
+  const title = story?.nama || 'Bouquet';
+  const description = story?.namaBuket
+    ? `Buket "${story.namaBuket}" — dibuat khusus dari namamu.`
+    : 'Bouquet dari nama — ESENEL';
   return {
     title: `${title} — ESENEL`,
     description,
@@ -32,12 +35,18 @@ export async function generateMetadata({ params }) {
       description,
       images: [
         {
-          url: `/og/name/${encodeURIComponent(key)}`,
+          url: `/og/name/${encodeURIComponent(key)}?v=${OG_VERSION}`,
           width: 1200,
           height: 630,
           alt: `${title} — ESENEL`,
         },
       ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${title} — ESENEL`,
+      description,
+      images: [`/og/name/${encodeURIComponent(key)}?v=${OG_VERSION}`],
     },
   };
 }

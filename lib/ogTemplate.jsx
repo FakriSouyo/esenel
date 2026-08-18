@@ -138,11 +138,12 @@ function HalftoneDots({ rows = 3, cols = 5, gap = 14, size = 6, color }) {
  */
 export function OgCard({ eyebrow = 'ESENEL · FLEUR ATELIER', title, tagline, accent = BRAND.meadow, image }) {
   const showImage = Boolean(image);
-  // Judul pixel diskalakan agar nama panjang tetap muat satu baris; lebih
-  // kecil lagi kalau ada foto di sampingnya.
+  // Judul pixel diskalakan agar nama panjang tetap muat; dengan foto di
+  // samping kolom teks lebih sempit, jadi ukurannya lebih kecil dan teks
+  // boleh wrap ke 2 baris kalau nama sangat panjang.
   const len = String(title || '').length;
   const titleSize = showImage
-    ? len > 12 ? 62 : len > 9 ? 78 : 96
+    ? len > 18 ? 40 : len > 12 ? 52 : len > 9 ? 64 : 78
     : len > 12 ? 84 : len > 9 ? 104 : 132;
   return (
     <div
@@ -221,9 +222,11 @@ export function OgCard({ eyebrow = 'ESENEL · FLEUR ATELIER', title, tagline, ac
               style={{
                 fontFamily: 'Geist Pixel',
                 fontSize: titleSize,
-                lineHeight: 1,
+                lineHeight: 1.08,
                 letterSpacing: '0.01em',
                 color: INK,
+                maxWidth: showImage ? 520 : 980,
+                whiteSpace: 'pre-wrap',
               }}
             >
               {title}
