@@ -19,7 +19,8 @@ import {
   generateWithGemini,
   GEMINI_IMAGE_MODEL_DEFAULT,
   imageHasLivingBeing,
-  NO_LIVING_BEINGS_SUFFIX,
+  ESENEL_STYLE_SUFFIX,
+  WRAPPING_STYLE,
   seedFromKey,
 } from '@/lib/nameStoryImage';
 import {
@@ -320,23 +321,21 @@ describe('nameStoryImage', () => {
     expect(story.imagePrompt).not.toContain('Mawar'); // jangan nama Indonesia mentah
   });
 
-  it('always forbids people and living creatures in the image prompt', () => {
+  it('creates ESENEL-style bouquet held by person in front of shop', () => {
     const story = { imagePrompt: 'A bouquet.', bunga: [{ nama: 'Mawar Merah', namaEn: 'deep red roses' }] };
     enforceImagePrompt(story);
-    expect(story.imagePrompt).toContain(NO_LIVING_BEINGS_SUFFIX);
-    expect(story.imagePrompt).toMatch(/no people, no human hands/i);
-    expect(story.imagePrompt).toMatch(/no animals, no insects/i);
-    expect(story.imagePrompt).toMatch(/NOT held by anyone/i);
+    expect(story.imagePrompt).toContain(ESENEL_STYLE_SUFFIX);
+    expect(story.imagePrompt).toMatch(/held by a person/i);
+    expect(story.imagePrompt).toMatch(/flower shop/i);
+    expect(story.imagePrompt).toMatch(/ESENEL/i);
   });
 
-  it('locks the composition as still life on a surface so the bouquet is not held', () => {
+  it('includes colorful wrapping style description', () => {
     const story = { imagePrompt: 'A bouquet.', bunga: [{ nama: 'Lavender', namaEn: 'purple lavender sprigs' }] };
     enforceImagePrompt(story);
-    expect(story.imagePrompt).toMatch(/^A single bouquet mixing/i);
-    expect(story.imagePrompt).toMatch(/plain wooden table/i);
-    expect(story.imagePrompt).toMatch(/premium floral catalog/i);
-    expect(story.imagePrompt).toMatch(/kraft paper/i);
-    expect(story.imagePrompt).toMatch(/not in a vase, no glass vase/i);
+    expect(story.imagePrompt).toContain(WRAPPING_STYLE);
+    expect(story.imagePrompt).toMatch(/wrapping paper/i);
+    expect(story.imagePrompt).toMatch(/ribbon/i);
   });
 
   it('enforceImagePrompt is a no-op for stories without flowers', () => {

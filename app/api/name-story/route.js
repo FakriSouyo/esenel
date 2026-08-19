@@ -129,7 +129,61 @@ export async function POST(req) {
     }
   }
 
-  // 3) fallback dummy (belum ada key, atau DeepSeek gagal).
+  // 3) Qwen fallback (Alibaba DashScope) — kalau DeepSeek gagal/tidak ada key.
+  const alibabaKey = process.env.ALIBABA_API_KEY;
+  const alibabaEndpoint = process.env.ALIBABA_ENDPOINT ||
+    'https://ws-1lzc28wlxlkdkgzm.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1';
+  if (alibabaKey) {
+    try {
+      const res = await fetch(`${alibabaEndpoint}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${alibabaKey}`,
+        },
+        body: JSON.stringify({
+          model: 'qwen-plus',
+          messages: [
+            { role: 'system', content: NAME_STORY_SYSTEM_PROMPT },
+            { role: 'user', content: buildNamePrompt(name, CATALOG_NAMES) },
+          ],
+          temperature: 0.85,
+          response_format: { type: 'json_object' },
+        }),
+        signal: AbortSignal.timeout(90000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data?.choices?.[0]?.message?.content;
+        const story = parseStoryResponse(raw);
+        if (story) {
+          story.nama = story.nama || name;
+          ensureUniqueBouquetName(story, name, CATALOG_NAMES);
+          if (!story.namaBuket) {
+            story.namaBuket = pickBouquetName(name, {
+              exclude: [name, ...CATALOG_NAMES],
+            });
+          }
+          finalizeNameStory(story, name, CATALOG_NAMES);
+          try {
+            await saveNameStoryCache(key, name, story);
+          } catch {
+            // cache gagal tidak memblokir jawaban
+          }
+          return NextResponse.json({
+            story,
+            name,
+            cached: false,
+            source: 'qwen',
+          });
+        }
+      }
+    } catch {
+      // timeout / network — jatuh ke dummy
+    }
+  }
+
+  // 4) fallback dummy (belum ada key, atau semua provider gagal).
   const story = getDummyStory(name, CATALOG_NAMES);
   story.nama = name;
   finalizeNameStory(story, name, CATALOG_NAMES);

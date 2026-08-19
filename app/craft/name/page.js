@@ -27,6 +27,10 @@ const CATALOG_NAMES = Array.from(new Set(products.map((p) => p.name)));
  * di .env.local), kalau tidak ada key jatuh ke dummy. Gambar lewat
  * POST /api/name-image.
  *
+ * OPTIMASI PREFETCH: Begitu story diterima, langsung start image generation
+ * di background. Client tidak perlu tunggu section "generate" untuk memulai.
+ * Total waktu = max(story_anim, image_gen) bukan story_anim + image_gen.
+ *
  * Riwayat: story TIDAK disimpan otomatis lagi (refetch dari cache Supabase
  * cepat dan hasilnya selalu segar). Yang disimpan cuma daftar nama yang
  * pernah dipakai (localStorage, kecil) untuk dropdown autocomplete di input
@@ -41,6 +45,7 @@ export default function NameBouquetPage() {
   const [story, setStory] = useState(null);
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [prefetchedImage, setPrefetchedImage] = useState(null); // { url, source }
   const inputRef = useRef(null);
 
   // Masuk ke alur nama = mulai fresh: buang buket nama yang belum jadi dari
@@ -108,6 +113,7 @@ export default function NameBouquetPage() {
     const key = normalizeName(name);
     if (!key) return; // kosong — biarkan fokus untuk mengetik
     setStage('thinking');
+    setPrefetchedImage(null); // reset prefetch
     // Minimal 2.2 detik agar state "Thinking" sempat terlihat walau cache
     // Supabase langsung menjawab.
     const started = Date.now();
@@ -125,11 +131,42 @@ export default function NameBouquetPage() {
     }
     if (!story) story = getDummyStory(name.trim(), CATALOG_NAMES);
     rememberName(name);
+
+    // OPTIMASI: Langsung start image generation di background
+    // Jangan tunggu section "generate" — mulai sekarang!
+    if (story?.imagePrompt) {
+      startImagePrefetch(key, story.imagePrompt);
+    }
+
     const wait = Math.max(0, 2200 - (Date.now() - started));
     setTimeout(() => {
       setStory(story);
       setStage('story');
     }, wait);
+  }
+
+  /**
+   * Prefetch image generation di background.
+   * Dipanggil segera setelah story diterima, SEBELUM client mulai animasi.
+   * Hasilnya (URL) disimpan di state dan diteruskan ke NameStory.
+   */
+  function startImagePrefetch(nameKey, prompt) {
+    // Fire-and-forget: jangan block UI
+    (async () => {
+      try {
+        const res = await fetch('/api/name-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nameKey, prompt }),
+        });
+        const data = await res.json();
+        if (data?.url) {
+          setPrefetchedImage({ url: data.url, source: data.source || 'prefetch' });
+        }
+      } catch {
+        // Prefetch gagal — NameStory akan fallback ke generate normal
+      }
+    })();
   }
 
   return (
@@ -149,6 +186,7 @@ export default function NameBouquetPage() {
       {stage === 'story' && story ? (
         <NameStory
           story={story}
+          prefetchedImage={prefetchedImage}
           onRestart={() => {
             try {
               window.sessionStorage.removeItem('esenel.directItem.v1');
@@ -157,6 +195,7 @@ export default function NameBouquetPage() {
             }
             setStory(null);
             setName('');
+            setPrefetchedImage(null);
             setStage('input');
           }}
         />

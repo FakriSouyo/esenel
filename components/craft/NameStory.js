@@ -117,7 +117,7 @@ function pickSimilar(story, count) {
   return top.slice(0, count);
 }
 
-export default function NameStory({ story, onRestart }) {
+export default function NameStory({ story, onRestart, prefetchedImage = null }) {
   const router = useRouter();
   const lenis = useLenis();
   const [active, setActive] = useState(0);
@@ -298,6 +298,22 @@ export default function NameStory({ story, onRestart }) {
     setImageUrl(null);
     setImgFailed(false);
     setGenImgLoaded(false);
+
+    // OPTIMASI: Kalau gambar sudah di-prefetch (dari page.js), langsung pakai!
+    // Tidak perlu call /api/name-image lagi — hemat 70+ detik.
+    if (prefetchedImage?.url) {
+      console.log('[NameStory] Using prefetched image:', prefetchedImage.source);
+      setGenStatus('generating');
+      setTimeout(() => {
+        if (cancelled) return;
+        setImageUrl(prefetchedImage.url);
+        setGenStatus('complete');
+        setTimeout(() => !cancelled && handleDone(), 2000);
+      }, 1500); // delay singkat supaya animasi tetap terlihat
+      return () => { cancelled = true; };
+    }
+
+    // Fallback: belum ada prefetch, generate seperti biasa
     const t1 = setTimeout(() => !cancelled && setGenStatus('generating'), 1100);
     const t2 = setTimeout(() => !cancelled && setGenStatus('refining'), 3400);
     (async () => {
@@ -326,7 +342,7 @@ export default function NameStory({ story, onRestart }) {
       clearTimeout(t1);
       clearTimeout(t2);
     };
-  }, [active, arrived, GENERATE, genAttempt, handleDone, nameKey, story.imagePrompt]);
+  }, [active, arrived, GENERATE, genAttempt, handleDone, nameKey, story.imagePrompt, prefetchedImage]);
 
   // Gambar sudah termuat → tunggu sejenak biar terlihat, baru pindah ke
   // section selesai (fallback 6 detik di atas kalau onLoad tidak pernah tiba).
