@@ -105,11 +105,24 @@ export function BouquetCanvas({
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  // Fullscreen strategy: prefer the real browser Fullscreen API (a genuine,
-  // edge-to-edge fullscreen on desktop). Fall back to the CSS-overlay
-  // (fixed inset-0) when requestFullscreen is unavailable or rejected (mobile /
-  // iOS), where the native API is unreliable.
+  // Touch devices (mobile / iOS) can't rely on the native element Fullscreen
+  // API: iOS Safari doesn't support it on arbitrary elements at all, and on
+  // Android the promise may never settle or silently no-op — so the CSS
+  // overlay would never kick in and the canvas wouldn't go fullscreen. Detect
+  // touch once and use the deterministic CSS-overlay fullscreen on those
+  // devices; only desktop gets the real browser Fullscreen API.
+  const isTouch = useMemo(
+    () => typeof window !== 'undefined' && (navigator.maxTouchPoints > 0 || 'ontouchstart' in window),
+    []
+  );
+
   const toggleFullscreen = useCallback(() => {
+    if (isTouch) {
+      setCssFs((v) => !v);
+      return;
+    }
+    // Desktop: real browser fullscreen, with the CSS overlay only as a last
+    // resort if the native API is missing or rejects.
     if (document.fullscreenElement) {
       document.exitFullscreen?.().catch(() => {});
       return;
@@ -120,7 +133,7 @@ export function BouquetCanvas({
     } else {
       setCssFs((v) => !v);
     }
-  }, []);
+  }, [isTouch]);
 
   // The bouquet layout derives ONLY from the chosen size — adding flowers
   // never makes the paper bigger. The mouth is raised a touch and the
