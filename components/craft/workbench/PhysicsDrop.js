@@ -118,20 +118,20 @@ export function PhysicsDrop({ dropQueue, boundary, wrap, settled, onDropConsumed
       const asset = getCraftAsset(req.assetId, req.pose || 'front');
       if (!asset) return;
       
-      // Spawn flowers at the top center of the wrap cone (narrower opening)
+      // Spawn flowers just above the mouth oval, in a tight centered cluster,
+      // so every drop lands in the bouquet mouth instead of falling far away.
       const centerX = wrap.wrapX + wrap.wrapWidth / 2;
-      const spread = wrap.topWidth * 0.6; // narrow spawn area matching cone top
-      const startX = centerX + (Math.random() - 0.5) * spread;
-      const startY = wrap.wrapY - 70; // above the cone opening
+      const startX = centerX + (Math.random() - 0.5) * wrap.topWidth * 0.28;
+      const startY = wrap.wrapY - 28; // barely above the sleeve opening
 
       const body = Matter.Bodies.circle(startX, startY, asset.radius, {
-        restitution: 0.32,
+        restitution: 0.25,
         friction: 0.6,
-        frictionAir: 0.015,
-        density: 0.0022,
+        frictionAir: 0.03,
+        density: 0.0032,
       });
-      Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.16);
-      Matter.Body.setVelocity(body, { x: (Math.random() - 0.5) * 1.6, y: 0 });
+      Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.08);
+      Matter.Body.setVelocity(body, { x: (Math.random() - 0.5) * 0.8, y: 0 });
 
       Matter.World.add(engine.world, body);
       bodiesRef.current.set(req.reqId, { body, assetId: req.assetId, pose: req.pose || 'front', startTime: performance.now() });

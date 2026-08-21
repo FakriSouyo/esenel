@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
@@ -10,12 +10,14 @@ import {
   PenLine,
   Sparkles,
   PackageCheck,
+  Bookmark,
 } from 'lucide-react';
 import { craftSizes, craftWrappings } from '@/data/flowers';
 import { CRAFT_ASSETS } from '@/lib/craftAssets';
 import { useCart } from '@/components/cart/CartContext';
 import { formatIDR } from '@/lib/format';
 import { BouquetWorkbench } from './workbench/BouquetWorkbench';
+import { SaveBouquetModal } from './SaveBouquetModal';
 import { useBouquetState } from '@/hooks/useBouquetState';
 import { WRAP_THEMES } from '@/lib/wrapThemes';
 import { WRAP_SHAPES } from '@/lib/wrapShapes';
@@ -37,13 +39,32 @@ const noteSuggestions = [
 
 const ease = [0.16, 1, 0.3, 1];
 
+/** Auto-save wizard prefs so an accidental refresh/exit is recovered. */
+const CRAFT_WIZARD_KEY = 'esenel.craft.wizard.v1';
+function loadWizard() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(CRAFT_WIZARD_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function CraftBuilder() {
   const router = useRouter();
+  const wizardPrefs = typeof window !== 'undefined' ? loadWizard() : {};
   const [step, setStep] = useState(1);
-  const [sizeId, setSizeId] = useState(craftSizes[1].id);
+  const [sizeId, setSizeId] = useState(() => {
+    const p = wizardPrefs;
+    return craftSizes.some((s) => s.id === p.sizeId) ? p.sizeId : craftSizes[1].id;
+  });
   const [quantities, setQuantities] = useState({});
-  const [wrappingId, setWrappingId] = useState(craftWrappings[0].id);
-  const [note, setNote] = useState('');
+  const [wrappingId, setWrappingId] = useState(() => {
+    const p = wizardPrefs;
+    return craftWrappings.some((w) => w.id === p.wrappingId) ? p.wrappingId : craftWrappings[0].id;
+  });
+  const [note, setNote] = useState(() => (typeof wizardPrefs.note === 'string' ? wizardPrefs.note : ''));
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
 
@@ -51,8 +72,34 @@ export default function CraftBuilder() {
   // survives step navigation — going back and forward never wipes the
   // flowers. Passed down to the workbench as props.
   const bouquet = useBouquetState();
-  const [theme, setTheme] = useState(WRAP_THEMES.kraft.id);
-  const [shapeId, setShapeId] = useState(WRAP_SHAPES.klasik.id);
+  const [theme, setTheme] = useState(() => {
+    const p = wizardPrefs;
+    return WRAP_THEMES[p.theme] ? p.theme : WRAP_THEMES.kraft.id;
+  });
+  const [shapeId, setShapeId] = useState(() => {
+    const p = wizardPrefs;
+    return WRAP_SHAPES[p.shapeId] ? p.shapeId : WRAP_SHAPES.klasik.id;
+  });
+  // Latest captured PNG of the bouquet (for Save / gallery).
+  const [previewImage, setPreviewImage] = useState(null);
+  // Save flow in the review step.
+  const [showSave, setShowSave] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Persist wizard prefs whenever they change (debounced).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        window.localStorage.setItem(
+          CRAFT_WIZARD_KEY,
+          JSON.stringify({ sizeId, wrappingId, note, theme, shapeId })
+        );
+      } catch {
+        // ignore
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [sizeId, wrappingId, note, theme, shapeId]);
 
   // A step beyond the flowers step is only reachable once flowers exist —
   // the wrapping / note / review steps can't be jumped to with an empty
@@ -241,6 +288,7 @@ export default function CraftBuilder() {
                   onThemeChange={setTheme}
                   shapeId={shapeId}
                   onShapeChange={setShapeId}
+                  onPreviewChange={setPreviewImage}
                 />
                 <p className="mt-4 text-center text-xs text-ink/40">
                   Tap a flower to drop it in — drag, rotate and scale each stem. Press ⌘Z to undo.
@@ -360,7 +408,21 @@ export default function CraftBuilder() {
                     <span className="font-display text-2xl">{formatIDR(total)}</span>
                   </div>
                 </div>
-                <div className="border-t border-sand/70 px-5 py-4">
+                <div className="space-y-2.5 border-t border-sand/70 px-5 py-4">
+                  {saved ? (
+                    <p className="flex items-center justify-center gap-2 py-3 text-[12px] font-medium text-earth">
+                      <Bookmark size={14} /> Saved to the community gallery ✿
+                    </p>
+                  ) : (
+                    <button
+                      onClick={() => setShowSave(true)}
+                      disabled={totalStems === 0}
+                      className="flex w-full items-center justify-center gap-2 rounded-pill border border-ink/20 py-3.5 text-[13px] font-medium tracking-nav text-ink transition-colors hover:border-ink/50 hover:bg-cloud disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <Bookmark size={14} />
+                      SAVE YOUR BOUQUET
+                    </button>
+                  )}
                   <button
                     onClick={handleAdd}
                     disabled={totalStems === 0}
@@ -410,6 +472,19 @@ export default function CraftBuilder() {
           )}
         </div>
       </div>
+
+      <SaveBouquetModal
+        open={showSave}
+        previewImage={previewImage}
+        flowers={selectedFlowers.map((f) => ({ name: f.name, qty: f.qty }))}
+        size={size.label}
+        wrapping={wrapping.name}
+        onClose={() => setShowSave(false)}
+        onSaved={() => {
+          setShowSave(false);
+          setSaved(true);
+        }}
+      />
     </div>
   );
 }

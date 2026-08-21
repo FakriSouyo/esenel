@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Undo2, Redo2, Trash2, Copy, FlipHorizontal2, ChevronUp, ChevronDown, Sparkles, Lock, Unlock } from 'lucide-react';
 import { useBouquetState } from '@/hooks/useBouquetState';
@@ -31,20 +31,42 @@ export function BouquetWorkbench({
   onThemeChange: onThemeChangeProp,
   shapeId: shapeIdProp,
   onShapeChange: onShapeChangeProp,
+  onPreviewChange,
 }) {
   // When CraftBuilder lifts the state up (so the arrangement survives step
-  // navigation), it passes the hook down; otherwise the workbench owns it.
-  const internalBouquet = useBouquetState();
+  // navigation), it passes the hook down and owns persistence; the internal
+  // copy here must NOT persist (else its empty items clobber the stored one).
+  const internalBouquet = useBouquetState({ persist: false });
   const bouquet = bouquetProp ?? internalBouquet;
   const [dropQueue, setDropQueue] = useState([]);
   const [touched, setTouched] = useState(false);
   const [theme, setTheme] = useState(themeProp ?? 'kraft');
   const [shapeId, setShapeId] = useState(shapeIdProp ?? 'klasik');
   const boundsRef = useRef(null);
+  const previewStageRef = useRef(null);
   const themeValue = themeProp ?? theme;
   const shapeValue = shapeIdProp ?? shapeId;
   const handleThemeChange = onThemeChangeProp ?? setTheme;
   const handleShapeChange = onShapeChangeProp ?? setShapeId;
+
+  // Export a PNG snapshot of the bouquet whenever it changes, so the wizard
+  // has a fresh image for the Save flow / gallery.
+  const capturePreview = useCallback(() => {
+    const stage = previewStageRef.current;
+    if (!stage) return;
+    try {
+      const uri = stage.toDataURL({ pixelRatio: 2, mimeType: 'image/png' });
+      if (uri && uri !== 'data:,') onPreviewChange?.(uri);
+    } catch {
+      // stage empty / not ready — skip
+    }
+  }, [onPreviewChange]);
+
+  useEffect(() => {
+    const t = setTimeout(capturePreview, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bouquet.items, themeValue, shapeValue, sizeId]);
 
   const counts = useMemo(() => {
     const c = {};
@@ -299,6 +321,9 @@ export function BouquetWorkbench({
           sizeLabel={sizeLabel}
           onBoundsChange={(b) => {
             boundsRef.current = b;
+          }}
+          onStageReady={(stage) => {
+            previewStageRef.current = stage;
           }}
         />
 

@@ -1,11 +1,28 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { getCraftAsset } from '@/lib/craftAssets';
 import { clampToTrapezoid } from '@/lib/craftBoundary';
 
 let seq = 0;
 const nextId = () => `item-${++seq}-${Date.now().toString(36)}`;
+
+/** Where the current bouquet arrangement is auto-saved (survives exit/refresh). */
+const STORAGE_KEY = 'esenel.craft.bouquet.v1';
+const SAVE_DEBOUNCE_MS = 500;
+
+/** Load a previously auto-saved arrangement (or empty array). */
+function loadPersisted() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const data = raw ? JSON.parse(raw) : null;
+    if (data && Array.isArray(data.items)) return data.items;
+  } catch {
+    // corrupt / unavailable storage — start empty
+  }
+  return [];
+}
 
 /**
  * Owns the list of flowers in the bouquet.
@@ -14,12 +31,31 @@ const nextId = () => `item-${++seq}-${Date.now().toString(36)}`;
  *   transform-end) are pushed onto the undo stack; mid-drag updates are not.
  * - Undo / redo walk past / future stacks (keyboard: ⌘Z, ⌘⇧Z).
  * - zIndex is derived from depth (y) so lower flowers render in front.
+ * - The arrangement is auto-saved to localStorage (debounced) so an
+ *   accidental refresh / exit never loses the user's bouquet.
  */
-export function useBouquetState() {
-  const [items, setItems] = useState([]);
+export function useBouquetState({ persist = true } = {}) {
+  const [items, setItems] = useState(() => (persist ? loadPersisted() : []));
   const [selectedId, setSelectedId] = useState(null);
   const [past, setPast] = useState([]);
   const [future, setFuture] = useState([]);
+  const saveTimerRef = useRef(null);
+
+  // Debounced auto-save of the arrangement.
+  useEffect(() => {
+    if (!persist) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ items }));
+      } catch {
+        // storage full / unavailable — ignore, not worth breaking the build
+      }
+    }, SAVE_DEBOUNCE_MS);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [items, persist]);
 
   const commit = useCallback((updater) => {
     setItems((prev) => {

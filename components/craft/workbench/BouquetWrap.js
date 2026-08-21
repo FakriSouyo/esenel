@@ -34,7 +34,7 @@ export const SIZE_FACTORS = {
 };
 
 // Base geometry (Medium size) before the size factor is applied.
-const BASE_GEOM = { halfW: 76, coneH: 92, tailLen: 64 };
+const BASE_GEOM = { halfW: 100, coneH: 102, tailLen: 68 };
 
 export function computeWrapGeom(size, sizeId = 'medium') {
   const f = SIZE_FACTORS[sizeId] || 1;
@@ -42,7 +42,7 @@ export function computeWrapGeom(size, sizeId = 'medium') {
   const tieY = size.height * 0.63; // where the twine gathers the stems
   const coneH = Math.min(size.height * 0.34, BASE_GEOM.coneH * f); // sleeve height above the tie
   const rimY = tieY - coneH; // top opening of the sleeve
-  const halfW = Math.min(size.width * 0.42, BASE_GEOM.halfW * f); // sleeve half-width
+  const halfW = Math.min(size.width * 0.5, BASE_GEOM.halfW * f); // sleeve half-width (fuller bouquet)
   const tailLen = Math.min(size.height * 0.22, BASE_GEOM.tailLen * f); // paper tail below the tie
   return { cx, tieY, coneH, rimY, halfW, tailLen };
 }

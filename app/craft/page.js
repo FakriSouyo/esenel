@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Sprout, ArrowRight } from 'lucide-react';
 import CraftBuilder from '@/components/craft/CraftBuilder';
+import { BouquetGallery } from '@/components/craft/BouquetGallery';
 
 import { ogImage } from '@/lib/site';
 
@@ -109,6 +110,8 @@ export default function CraftPage() {
           <CraftBuilder />
         </div>
       </section>
+
+      <BouquetGallery />
     </main>
   );
 }

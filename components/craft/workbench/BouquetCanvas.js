@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Stage, Layer, Ellipse, Rect, Path, Transformer, Group, Circle, Text, Line } from 'react-konva';
+import { Stage, Layer, Rect, Path, Transformer, Group, Circle } from 'react-konva';
 import { Maximize2, Minimize2, Undo2, Redo2, Trash2, Copy, FlipHorizontal2, ChevronUp, ChevronDown, Lock, Unlock } from 'lucide-react';
 import { BouquetItem } from './BouquetItem';
 import { PhysicsDrop } from './PhysicsDrop';
 import { WrapBack, WrapFront, WrapMouth, computeWrapGeom } from './BouquetWrap';
 import { CRAFT_ASSETS, getCraftAsset, getFlowerPoseSrc, POSE_LABELS, flowerDisplaySize } from '@/lib/craftAssets';
 import { WRAP_THEMES } from '@/lib/wrapThemes';
-import { WRAP_SHAPES, buildFlaps, buildFrontPanels, buildTail } from '@/lib/wrapShapes';
+import { WRAP_SHAPES } from '@/lib/wrapShapes';
 import { clampToTrapezoid } from '@/lib/craftBoundary';
 
 export function BouquetCanvas({
@@ -45,13 +45,21 @@ export function BouquetCanvas({
   sizeId = 'medium',
   sizeLabel = 'Medium',
   onBoundsChange,
+  onStageReady,
 }) {
   const containerRef = useRef(null);
+  const stageRef = useRef(null);
   const [size, setSize] = useState({ width: 480, height: 500 });
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showParts, setShowParts] = useState(false);
   const nodesRef = useRef(new Map());
   const trRef = useRef(null);
+
+  // Expose the rendered Stage upward so the workbench can export a PNG
+  // snapshot of the bouquet for Save / gallery.
+  useEffect(() => {
+    onStageReady?.(stageRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.width, size.height]);
 
   const pickerFlowers = CRAFT_ASSETS.filter((a) => a.category === 'flowers');
 
@@ -76,21 +84,11 @@ export function BouquetCanvas({
     return () => ro.disconnect();
   }, []);
 
-  // Track the browser fullscreen state of the canvas.
-  useEffect(() => {
-    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
-
+  // CSS-overlay "fullscreen": we do NOT use the browser Fullscreen API because
+  // it is unreliable on iOS/mobile. Toggling `isFullscreen` pins the canvas
+  // to the viewport (fixed inset-0) — consistent across every device.
   const toggleFullscreen = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.();
-    } else {
-      el.requestFullscreen?.();
-    }
+    setIsFullscreen((v) => !v);
   }, []);
 
   // The bouquet layout derives ONLY from the chosen size — adding flowers
@@ -143,10 +141,18 @@ export function BouquetCanvas({
     prevSizeRef.current = size;
     if (!prev || !items.length) return;
     if (prev.width === size.width && prev.height === size.height) return;
-    const sx = size.width / prev.width;
-    const sy = size.height / prev.height;
-    if (!Number.isFinite(sx) || !Number.isFinite(sy) || sx <= 0 || sy <= 0) return;
-    onRemapItems?.((it) => clampToTrapezoid({ x: it.x * sx, y: it.y * sy }, dragLimit));
+    // Remap flowers relative to the bouquet anchor (mouth center + rim) so the
+    // arrangement stays glued to the paper when the canvas resizes (fullscreen
+    // toggle, rotate, container change) instead of being multiplied by a raw
+    // canvas scale factor (which drifts because the paper is centered/capped).
+    const prevWrap = computeWrapGeom(prev, sizeId);
+    const curWrap = computeWrapGeom(size, sizeId);
+    const dx = curWrap.cx - prevWrap.cx;
+    const dy = curWrap.rimY - prevWrap.rimY;
+    // If the geometry is stable (e.g. capping keeps the paper the same pixel
+    // size), keep flowers at constant offset from the anchor.
+    if (dx === 0 && dy === 0) return;
+    onRemapItems?.((it) => clampToTrapezoid({ x: it.x + dx, y: it.y + dy }, dragLimit));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size]);
 
@@ -173,11 +179,14 @@ export function BouquetCanvas({
   // random scatter. Physics still decides where it lands.
   const handleSettle = useCallback(
     (reqId, assetId, transform) => {
-      const dx = (transform.x - size.width / 2) / Math.max(1, size.width / 2);
+      // Clamp the fall to the mouth trapezoid so a dropped flower always lands
+      // inside the bouquet (near the mouth oval), never far outside the paper.
+      const clamped = clampToTrapezoid({ x: transform.x, y: transform.y }, dragLimit);
+      const dx = (clamped.x - size.width / 2) / Math.max(1, size.width / 2);
       const tilt = Math.max(-24, Math.min(24, dx * 22 + (Math.random() - 0.5) * 10));
-      onFlowerSettled(reqId, assetId, { ...transform, rotation: tilt });
+      onFlowerSettled(reqId, assetId, { ...clamped, rotation: tilt });
     },
-    [size, onFlowerSettled]
+    [size, dragLimit, onFlowerSettled]
   );
 
   const sorted = [...items].sort((a, b) => a.zIndex - b.zIndex);
@@ -244,10 +253,12 @@ export function BouquetCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden"
-      style={{ touchAction: 'none', background: isFullscreen ? '#F7F3EC' : undefined }}
+      className={`relative overflow-hidden ${
+        isFullscreen ? 'fixed inset-0 z-[60] h-[100dvh] w-screen' : 'h-full w-full'
+      }`}
+      style={{ touchAction: 'pan-y', background: isFullscreen ? '#F7F3EC' : undefined }}
     >
-      <Stage width={size.width} height={size.height} onClick={handleBackground} onTap={handleBackground}>
+      <Stage ref={stageRef} width={size.width} height={size.height} onClick={handleBackground} onTap={handleBackground}>
         <Layer>
           {/* paper flaps + ground shadow — behind everything */}
           <WrapBack size={size} themeId={theme} sizeId={sizeId} shapeId={shapeId} />
@@ -274,10 +285,6 @@ export function BouquetCanvas({
           {/* front flowers — overlap the paper */}
           {frontFlowers.map(renderFlower)}
 
-          {/* debug markers — label every part of the bouquet so we can
-              decide together which parts the flowers should cover */}
-          {showParts && <PartsMarkers wrap={wrap} dragLimit={dragLimit} shapeId={shapeId} sizeId={sizeId} />}
-
           <Transformer
             ref={trRef}
             rotateEnabled
@@ -293,21 +300,6 @@ export function BouquetCanvas({
           />
         </Layer>
       </Stage>
-
-      {/* part-marker toggle (next to fullscreen) */}
-      <button
-        type="button"
-        onClick={() => setShowParts((v) => !v)}
-        aria-pressed={showParts}
-        title="Show bouquet part markers"
-        className={`absolute right-3 top-14 z-30 rounded-full border px-3 py-1.5 text-[10px] font-semibold tracking-wide transition-colors ${
-          showParts
-            ? 'border-[#23301F] bg-[#23301F] text-white'
-            : 'border-sand bg-white/85 text-ink/55 shadow-[0_4px_14px_rgba(32,34,30,0.14)] backdrop-blur-sm hover:text-ink'
-        }`}
-      >
-        {showParts ? 'HIDE PARTS' : 'SHOW PARTS'}
-      </button>
 
       {/* fullscreen toggle */}
       <button
@@ -469,82 +461,5 @@ function FsIconBtn({ children, onClick, disabled, title, danger }) {
     >
       {children}
     </button>
-  );
-}
-
-/**
- * Debug overlay: outlines + labels for every part of the bouquet (flaps,
- * sleeve, mouth oval, tail, tie, drag limit) so we can agree which parts
- * the flowers should cover. Toggle with the SHOW PARTS button.
- */
-function PartsMarkers({ wrap, dragLimit, shapeId = 'klasik', sizeId = 'medium' }) {
-  const { cx, tieY, rimY, halfW, coneH, tailLen } = wrap;
-  const flaps = buildFlaps(shapeId, wrap, sizeId);
-  const front = buildFrontPanels(shapeId, wrap);
-  const tailD = buildTail(shapeId, wrap);
-  return (
-    <Group listening={false}>
-      {/* FLAPS — the paper fan behind the flowers */}
-      {flaps.map((f) => {
-        const rad = (f.rot * Math.PI) / 180;
-        return (
-          <Line
-            key={f.rot}
-            points={[cx, tieY, cx + Math.sin(rad) * f.length, tieY - Math.cos(rad) * f.length]}
-            stroke="#E8B64C"
-            strokeWidth={2}
-            opacity={0.9}
-          />
-        );
-      })}
-      <PartChip x={cx - 84} y={tieY - flaps[0].length - 40} color="#E8B64C" label="FLAPS · behind paper" />
-
-      {/* SLEEVE — the shape's front panels (outline only, never covers flowers) */}
-      {front.panels.map((p, i) => (
-        <Path key={i} data={p.d} stroke="#3B82F6" strokeWidth={2} />
-      ))}
-      <PartChip x={cx + halfW * 0.5} y={rimY + coneH * 0.42} color="#3B82F6" label="SLEEVE" />
-
-      {/* MOUTH — the brown oval opening */}
-      <Ellipse x={cx} y={rimY} radiusX={halfW * 0.92} radiusY={10} stroke="#EF4444" strokeWidth={2} />
-      <PartChip x={cx - halfW * 0.92 - 96} y={rimY - 14} color="#EF4444" label="MOUTH (brown oval)" />
-
-      {/* TAIL — paper hanging below the tie */}
-      <Path data={tailD} stroke="#22C55E" strokeWidth={2} />
-      <PartChip x={cx + 30} y={tieY + tailLen * 0.5 - 10} color="#22C55E" label="TAIL" />
-
-      {/* TIE — where the twine gathers the stems */}
-      <Ellipse x={cx} y={tieY} radiusX={30} radiusY={12} stroke="#A855F7" strokeWidth={2} />
-      <PartChip x={cx + 36} y={tieY - 26} color="#A855F7" label="TIE" />
-
-      {/* DRAG LIMIT — inverted trapezoid (wide top, narrow at the mouth) */}
-      <Line
-        points={[
-          dragLimit.cx - dragLimit.halfTop,
-          dragLimit.yTop,
-          dragLimit.cx + dragLimit.halfTop,
-          dragLimit.yTop,
-          dragLimit.cx + dragLimit.halfBottom,
-          dragLimit.yBottom,
-          dragLimit.cx - dragLimit.halfBottom,
-          dragLimit.yBottom,
-        ]}
-        closed
-        stroke="#F97316"
-        strokeWidth={2}
-        dash={[6, 5]}
-      />
-      <PartChip x={dragLimit.cx + dragLimit.halfTop - 118} y={dragLimit.yTop + 6} color="#F97316" label="DRAG LIMIT" />
-    </Group>
-  );
-}
-
-function PartChip({ x, y, color, label }) {
-  const w = label.length * 6.4 + 14;
-  return (
-    <Group x={x} y={y}>
-      <Rect width={w} height={20} cornerRadius={4} fill="#FFFFFF" opacity={0.94} stroke={color} strokeWidth={1.2} />
-      <Text text={label} x={7} y={4} fontSize={11} fontStyle="bold" fill={color} fontFamily="Inter, system-ui, sans-serif" />
-    </Group>
   );
 }
