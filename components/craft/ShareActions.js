@@ -1,26 +1,28 @@
 'use client';
 
 /**
- * Aksi bagikan tanpa dialog — muncul sebagai TEKS di bawah tombol utama
- * (CHECKOUT / TULIS NAMA LAIN). Klik teksnya → card kecil melebar (expand)
- * berisi dua tombol:
- *   BAGIKAN — Web Share API (kirim PNG kartu ke story/media sosial),
- *             fallback ke clipboard / unduh.
- *   UNDUH   — simpan PNG kartu ke device.
+ * Aksi bagikan — muncul sebagai TEKS di bawah tombol utama (CHECKOUT /
+ * TULIS NAMA LAIN). Klik teksnya → card kecil melebar (expand) berisi:
+ *   BAGIKAN   — Web Share API (PNG kartu + url link buket), fallback ke
+ *               salin link di clipboard.
+ *   SALIN LINK— salin link permanen <origin>/craft/name/<nameKey>.
  *
- * Default TERTUTUP — user sendiri yang membuka (expand). Tidak ada modal/
- * dialog sama sekali; card-nya inline mengikuti alur halaman.
+ * Tombol PREVIEW (dialog flip card) sengaja di-HIDE untuk sementara sampai
+ * tampilannya disepakati — kode dialognya masih ada di bawah (previewOpen /
+ * flipped / zoomOpen), tinggal dipanggil lagi saat mau dikembalikan.
+ *
+ * Default TERTUTUP — user sendiri yang membuka (expand).
  *
  * Export PNG memakai html-to-image terhadap klon kartu yang dirender lebar
  * (1080px) di luar layar (hanya saat card terbuka). Foto di-inline dulu
- * menjadi data URL sebelum export, supaya UNDUH/BAGIKAN selalu berisi gambar
- * buket asli, bukan placeholder ✿.
+ * menjadi data URL sebelum export, supaya BAGIKAN/UNDUH KARTU selalu berisi
+ * gambar buket asli, bukan placeholder ✿.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toPng } from 'html-to-image';
-import { ChevronDown, Download, Share2 } from 'lucide-react';
+import { ChevronDown, Download, Link2, RotateCw, Share2, X } from 'lucide-react';
 import EsenelResultCard from '@/components/craft/EsenelResultCard';
 
 /* ---- Font embed untuk export PNG ----
@@ -72,11 +74,70 @@ function fileName(story) {
   return `buket-${base || 'nama'}.png`;
 }
 
-export default function ShareActions({ story, imageSrc, imageAlt }) {
+/** Arti nama singkat untuk sisi depan flip card — potong sampai titik pertama. */
+function shortArti(text) {
+  if (!text) return '';
+  const t = String(text).trim();
+  const idx = t.indexOf('.');
+  return (idx === -1 ? t : t.slice(0, idx + 1)).trim();
+}
+
+export default function ShareActions({ story, nameKey, imageSrc, imageAlt }) {
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(null); // 'share' | 'download' | null
+  const [busy, setBusy] = useState(null); // 'share' | 'download' | 'link' | null
   const [msg, setMsg] = useState(null);
+  // Preview dialog — flip card: front foto+nama+arti singkat, back bunga.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  // Apakah card ter-flip ke sisi back (bunga).
+  const [flipped, setFlipped] = useState(false);
+  // Zoom foto di dalam pratinjau (klik foto di front).
+  const [zoomOpen, setZoomOpen] = useState(false);
   const exportRef = useRef(null);
+
+  // Link permanen untuk nama ini — dipakai tombol "SALIN LINK" dan ikut
+  // disertakan saat BAGIKAN (Web Share). Dibangun dari origin aktif supaya
+  // selalu mengarah ke domain yang sedang dibuka (dev vs production).
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const origin = window.location.origin;
+    const key = String(nameKey || '').trim();
+    return key ? `${origin}/craft/name/${encodeURIComponent(key)}` : origin + '/craft/name';
+  }, [nameKey]);
+
+  const copyLink = useCallback(async () => {
+    setBusy('link');
+    setMsg(null);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setMsg('Link disalin — bagikan ke siapa pun!');
+    } catch {
+      setMsg('Gagal menyalin link.');
+    } finally {
+      setBusy(null);
+    }
+  }, [shareUrl]);
+
+  // Tutup dialog dengan Escape — zoom dulu (yang dibuka terakhir), baru
+  // pratinjau. Tandai <body> supaya handler global "kembali ke /craft"
+  // tidak ikut jalan saat dialog terbuka.
+  const anyDialogOpen = previewOpen || zoomOpen;
+  useEffect(() => {
+    try {
+      if (anyDialogOpen) document.body.dataset.esenelDialog = 'open';
+      else delete document.body.dataset.esenelDialog;
+    } catch {
+      // abaikan
+    }
+    if (!anyDialogOpen) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        if (zoomOpen) setZoomOpen(false);
+        else setPreviewOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [anyDialogOpen, zoomOpen]);
 
   // Foto di-inline menjadi data URL di klon export. Data URL tidak butuh
   // CORS sama sekali, jadi toPng selalu bisa membacanya → UNDUH/BAGIKAN
@@ -143,9 +204,10 @@ export default function ShareActions({ story, imageSrc, imageAlt }) {
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], fileName(story), { type: 'image/png' });
       const title = `Buket ${story?.namaBuket || story?.nama}`;
-      const text = `Bouquet untuk ${story?.nama} — dibuat dengan ESENEL 💐`;
+      const text = `Buket ${story?.namaBuket || story?.nama} untuk ${story?.nama} — buat dengan ESENEL 💐 ${shareUrl}`;
+      // Bagikan KARTU (PNG) sekaligus LINK-nya kalau platform mendukung URL.
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title, text });
+        await navigator.share({ files: [file], title, text, url: shareUrl });
         setMsg('Berhasil dibagikan!');
         return;
       }
@@ -154,8 +216,8 @@ export default function ShareActions({ story, imageSrc, imageAlt }) {
         setMsg('Gambar disalin ke clipboard — tinggal tempel di story!');
         return;
       }
-      download(dataUrl);
-      setMsg('Gambar terunduh — siap diunggah ke story!');
+      await navigator.clipboard.writeText(shareUrl);
+      setMsg('Link disalin — bagikan ke siapa pun!');
     } catch (err) {
       if (err?.name === 'AbortError') {
         setMsg(null);
@@ -165,22 +227,30 @@ export default function ShareActions({ story, imageSrc, imageAlt }) {
     } finally {
       setBusy(null);
     }
-  }, [capture, story]);
+  }, [capture, story, shareUrl]);
 
-  const handleDownload = useCallback(async () => {
+  // Unduh KARTU PNG — dipakai tombol "UNDUH KARTU" di dalam dialog pratinjau.
+  const handleDownloadCard = useCallback(async () => {
     setBusy('download');
     setMsg(null);
     try {
       download(await capture());
-      setMsg('Gambar terunduh!');
+      setMsg('Kartu PNG terunduh!');
     } catch {
-      setMsg('Gagal mengunduh — coba lagi.');
+      setMsg('Gagal mengunduh kartu — coba lagi.');
     } finally {
       setBusy(null);
     }
   }, [capture]);
 
-  const busyLabel = busy === 'share' ? 'MENYIAPKAN…' : busy === 'download' ? 'MENGUNDUH…' : null;
+  const busyLabel =
+    busy === 'share'
+      ? 'MENYIAPKAN…'
+      : busy === 'download'
+        ? 'MENGUNDUH…'
+        : busy === 'link'
+          ? '…'
+          : null;
 
   return (
     <>
@@ -212,28 +282,28 @@ export default function ShareActions({ story, imageSrc, imageAlt }) {
             className="overflow-hidden"
           >
             <div className="mx-auto mt-3 w-full max-w-sm rounded-2xl border border-ink/10 bg-white/80 p-3 shadow-sm">
-              <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={handleShare}
+                disabled={busy !== null}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-[11px] font-semibold tracking-nav text-cloud transition-all hover:bg-ink/90 active:scale-[0.98] disabled:opacity-50"
+              >
+                <Share2 size={13} />
+                {busy === 'share' ? busyLabel : 'BAGIKAN'}
+              </button>
+              <div className="mt-2">
                 <button
                   type="button"
-                  onClick={handleShare}
+                  onClick={copyLink}
                   disabled={busy !== null}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-[11px] font-semibold tracking-nav text-cloud transition-all hover:bg-ink/90 active:scale-[0.98] disabled:opacity-50"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-ink/20 bg-ink/5 px-4 py-2.5 text-[11px] font-semibold tracking-nav text-ink/80 transition-all hover:border-ink/40 hover:text-ink active:scale-[0.98] disabled:opacity-50"
                 >
-                  <Share2 size={13} />
-                  {busy === 'share' ? busyLabel : 'BAGIKAN'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  disabled={busy !== null}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-ink/20 bg-ink/5 px-4 py-2.5 text-[11px] font-semibold tracking-nav text-ink/80 transition-all hover:border-ink/40 hover:text-ink active:scale-[0.98] disabled:opacity-50"
-                >
-                  <Download size={13} />
-                  {busy === 'download' ? busyLabel : 'UNDUH'}
+                  <Link2 size={13} />
+                  SALIN LINK
                 </button>
               </div>
               <p className="mt-2 text-center text-[11px] text-ink/45">
-                Kartu PNG siap dibagikan ke story atau disimpan.
+                Bagikan kartu & link, atau salin link-nya.
               </p>
               {msg && <p className="mt-1 text-center text-[11px] text-ink/55">{msg}</p>}
             </div>
@@ -259,6 +329,184 @@ export default function ShareActions({ story, imageSrc, imageAlt }) {
           <EsenelResultCard story={story} imageSrc={imageSrc} imageAlt={imageAlt} maxWidth="1080px" />
         </div>
       )}
+
+      {/* ── Dialog pratinjau — flip card (front foto+nama+arti, back bunga) ── */}
+      <AnimatePresence>
+        {previewOpen && (
+          <motion.div
+            className="fixed inset-0 z-[95] flex min-h-screen items-center justify-center bg-ink/60 p-4 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setPreviewOpen(false)}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Pratinjau buket ${story.namaBuket || story.nama}`}
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md"
+            >
+              {/* tombol tutup — melayang di pojok kanan atas card */}
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+                aria-label="Tutup pratinjau"
+                className="absolute -right-2 -top-2 z-[2] grid size-9 place-items-center rounded-full bg-cloud text-ink/70 shadow-lg ring-1 ring-ink/10 transition-colors hover:bg-white hover:text-ink"
+              >
+                <X size={16} />
+              </button>
+
+              {/* panggung flip */}
+              <div className="mx-auto w-full [perspective:1600px]" style={{ height: 'min(72vh, 30rem)' }}>
+                <div
+                  className="relative h-full w-full transition-transform duration-700 [transform-style:preserve-3d]"
+                  style={{ transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
+                >
+                  {/* ===== SISI DEPAN (front): foto + nama + arti singkat ===== */}
+                  <div className="absolute inset-0 m-0.5 flex flex-col overflow-hidden rounded-3xl bg-cloud shadow-2xl [backface-visibility:hidden]">
+                    {/* foto buket — klik → perbesar */}
+                    <button
+                      type="button"
+                      onClick={() => setZoomOpen(true)}
+                      aria-label="Perbesar foto buket"
+                      className="relative min-h-0 flex-1 w-full overflow-hidden bg-sand/40"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imageSrc}
+                        alt={imageAlt || `Buket ${story.namaBuket || story.nama}`}
+                        className="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.03]"
+                      />
+                    </button>
+                    {/* nama + arti nama singkat */}
+                    <div className="shrink-0 border-t border-ink/10 bg-white/85 px-5 py-4 text-left">
+                      <p className="font-display text-2xl leading-none tracking-[-0.01em] text-ink">
+                        {story.nama}
+                      </p>
+                      <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-ink/40">
+                        {story.namaBuket || 'ESENEL'} · buket personal
+                      </p>
+                      {shortArti(story.artiNama) && (
+                        <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-ink/70">
+                          {shortArti(story.artiNama)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ===== SISI BELAKANG (back): bunga yang cocok ===== */}
+                  <div className="absolute inset-0 m-0.5 flex flex-col overflow-hidden rounded-3xl bg-cloud shadow-2xl [backface-visibility:hidden] [transform:rotateY(180deg)]">
+                    <div className="shrink-0 border-b border-ink/10 px-5 py-3 text-left">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-ink/40">
+                        Bunga yang cocok
+                      </p>
+                      <p className="mt-0.5 font-display text-lg leading-none text-ink">
+                        {story.nama} 💐
+                      </p>
+                    </div>
+                    <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4 text-left">
+                      {Array.isArray(story.bunga) &&
+                        story.bunga.map((f, i) => (
+                          <li key={i} className="flex items-start gap-3">
+                            <span className="mt-1 size-2.5 shrink-0 rounded-[4px] bg-meadow" />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium text-ink">
+                                {f?.namaPuitis || f?.nama}
+                              </span>
+                              {f?.alasan && (
+                                <span className="block text-xs leading-relaxed text-ink/60">
+                                  {f.alasan}
+                                </span>
+                              )}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* footer: flip + unduh */}
+              <div className="mt-3 flex items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setFlipped((v) => !v)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-[11px] font-semibold tracking-nav text-cloud transition-colors hover:bg-ink/90"
+                >
+                  <RotateCw size={13} />
+                  {flipped ? 'KEMBALI' : 'LIHAT BUNGA'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadCard}
+                  disabled={busy !== null}
+                  className="inline-flex items-center gap-2 rounded-xl border border-ink/20 bg-cloud px-4 py-2.5 text-[11px] font-semibold tracking-nav text-ink/80 transition-colors hover:border-ink/40 hover:text-ink disabled:opacity-50"
+                >
+                  <Download size={13} />
+                  {busy === 'download' ? busyLabel : 'UNDUH KARTU'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Zoom foto buket — klik foto di pratinjau (gaya zoom bouquet) */}
+      <AnimatePresence>
+        {zoomOpen && (
+          <motion.div
+            className="fixed inset-0 z-[99] flex items-center justify-center bg-ink/80 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setZoomOpen(false)}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Perbesar buket ${story.namaBuket || story.nama}`}
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg overflow-hidden rounded-3xl bg-cloud p-2 shadow-2xl"
+            >
+              <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-sand/40">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageSrc}
+                  alt={imageAlt || `Buket ${story.namaBuket || story.nama}`}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 px-1 pt-2">
+                <div className="min-w-0 text-left">
+                  <p className="truncate font-display text-base tracking-[-0.01em] text-ink">
+                    {story.namaBuket || story.nama}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-ink/40">
+                    ESENEL · buket personal
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setZoomOpen(false)}
+                  aria-label="Tutup"
+                  className="grid size-8 shrink-0 place-items-center rounded-full bg-ink/5 text-ink/60 transition-colors hover:bg-ink/10 hover:text-ink"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

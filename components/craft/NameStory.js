@@ -623,6 +623,7 @@ export default function NameStory({ story, onRestart, prefetchedImage = null }) 
           {/* Bagikan — teks di bawah dua tombol, expand card UNDUH + BAGIKAN */}
           <ShareActions
             story={story}
+            nameKey={nameKey}
             imageSrc={hasImage ? (imageUrl && !imgFailed ? imageUrl : similar[0]?.image) : null}
             imageAlt={`Buket ${story.namaBuket || story.nama}`}
           />
