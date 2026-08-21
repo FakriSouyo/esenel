@@ -53,18 +53,18 @@ function loadWizard() {
 
 export default function CraftBuilder() {
   const router = useRouter();
-  const wizardPrefs = typeof window !== 'undefined' ? loadWizard() : {};
+  // NOTE: wizard prefs are hydrated from localStorage in a mount effect, NOT
+  // in the useState initializers. Reading localStorage in an initializer makes
+  // the server render the default and the client render the stored value, so
+  // the first paint differs → "Hydration failed" (e.g. a different size button
+  // shows the ✓ svg). Initializing to deterministic defaults keeps SSR and the
+  // first client render identical; the mount effect then restores saved prefs
+  // after hydration.
   const [step, setStep] = useState(1);
-  const [sizeId, setSizeId] = useState(() => {
-    const p = wizardPrefs;
-    return craftSizes.some((s) => s.id === p.sizeId) ? p.sizeId : craftSizes[1].id;
-  });
+  const [sizeId, setSizeId] = useState(() => craftSizes[1].id);
   const [quantities, setQuantities] = useState({});
-  const [wrappingId, setWrappingId] = useState(() => {
-    const p = wizardPrefs;
-    return craftWrappings.some((w) => w.id === p.wrappingId) ? p.wrappingId : craftWrappings[0].id;
-  });
-  const [note, setNote] = useState(() => (typeof wizardPrefs.note === 'string' ? wizardPrefs.note : ''));
+  const [wrappingId, setWrappingId] = useState(() => craftWrappings[0].id);
+  const [note, setNote] = useState('');
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
 
@@ -72,19 +72,24 @@ export default function CraftBuilder() {
   // survives step navigation — going back and forward never wipes the
   // flowers. Passed down to the workbench as props.
   const bouquet = useBouquetState();
-  const [theme, setTheme] = useState(() => {
-    const p = wizardPrefs;
-    return WRAP_THEMES[p.theme] ? p.theme : WRAP_THEMES.kraft.id;
-  });
-  const [shapeId, setShapeId] = useState(() => {
-    const p = wizardPrefs;
-    return WRAP_SHAPES[p.shapeId] ? p.shapeId : WRAP_SHAPES.klasik.id;
-  });
+  const [theme, setTheme] = useState(() => WRAP_THEMES.kraft.id);
+  const [shapeId, setShapeId] = useState(() => WRAP_SHAPES.klasik.id);
   // Latest captured PNG of the bouquet (for Save / gallery).
   const [previewImage, setPreviewImage] = useState(null);
   // Save flow in the review step.
   const [showSave, setShowSave] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Restore auto-saved wizard prefs after hydration (client-only).
+  useEffect(() => {
+    const w = loadWizard();
+    if (craftSizes.some((s) => s.id === w.sizeId)) setSizeId(w.sizeId);
+    if (craftWrappings.some((wrap) => wrap.id === w.wrappingId)) setWrappingId(w.wrappingId);
+    if (typeof w.note === 'string') setNote(w.note);
+    if (WRAP_THEMES[w.theme]) setTheme(w.theme);
+    if (WRAP_SHAPES[w.shapeId]) setShapeId(w.shapeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist wizard prefs whenever they change (debounced).
   useEffect(() => {

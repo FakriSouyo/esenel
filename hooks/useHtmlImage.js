@@ -11,6 +11,11 @@ export function useHtmlImage(src) {
     let cancelled = false;
     const img = new window.Image();
     img.decoding = 'async';
+    // CORS-load the image (Supabase Storage sends Access-Control-Allow-Origin).
+    // Without this the canvas would draw a cross-origin image, become
+    // "tainted", and stage.toDataURL() would throw a SecurityError — which is
+    // why saved bouquet snapshots were missing the flowers.
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
       if (!cancelled) setImage(img);
     };

@@ -55,6 +55,11 @@ export function BouquetWorkbench({
     const stage = previewStageRef.current;
     if (!stage) return;
     try {
+      // Draw once so every image (especially CORS-loaded flowers) is fully
+      // rendered onto the canvas before we export it — avoids exporting a
+      // stale frame (e.g. the wrap-only snapshot from before the flowers
+      // decoded).
+      stage.batchDraw();
       const uri = stage.toDataURL({ pixelRatio: 2, mimeType: 'image/png' });
       if (uri && uri !== 'data:,') onPreviewChange?.(uri);
     } catch {

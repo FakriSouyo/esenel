@@ -49,17 +49,29 @@ export function BouquetCanvas({
 }) {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
-  const [size, setSize] = useState({ width: 480, height: 500 });
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  // `size` starts `null` until the ResizeObserver measures the container. A
+  // bogus initial size (e.g. {480,500}) used to trigger a spurious remap on
+  // first mount/resize and shift flowers that were already placed correctly.
+  const [size, setSize] = useState(null);
+  // Two distinct "fullscreen" modes: the real browser Fullscreen API (best for
+  // desktop) and a CSS-overlay fallback for mobile/iOS where requestFullscreen
+  // is unreliable. `isFullscreen` is true if either is active.
+  const [browserFs, setBrowserFs] = useState(false);
+  const [cssFs, setCssFs] = useState(false);
+  const isFullscreen = browserFs || cssFs;
   const nodesRef = useRef(new Map());
   const trRef = useRef(null);
+
+  // Geometry needs a concrete size even before the first measure — fall back
+  // to the legacy default so nothing computes NaN while `size` is null.
+  const geoSize = size ?? { width: 480, height: 500 };
 
   // Expose the rendered Stage upward so the workbench can export a PNG
   // snapshot of the bouquet for Save / gallery.
   useEffect(() => {
     onStageReady?.(stageRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size.width, size.height]);
+  }, [size?.width, size?.height]);
 
   const pickerFlowers = CRAFT_ASSETS.filter((a) => a.category === 'flowers');
 
@@ -84,18 +96,37 @@ export function BouquetCanvas({
     return () => ro.disconnect();
   }, []);
 
-  // CSS-overlay "fullscreen": we do NOT use the browser Fullscreen API because
-  // it is unreliable on iOS/mobile. Toggling `isFullscreen` pins the canvas
-  // to the viewport (fixed inset-0) — consistent across every device.
+  // Keep `browserFs` in sync with the native Fullscreen API so the toggle
+  // button and everything driven by `isFullscreen` react to the browser's own
+  // fullscreen transitions (Esc exit, OS controls, etc).
+  useEffect(() => {
+    const onFsChange = () => setBrowserFs(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  // Fullscreen strategy: prefer the real browser Fullscreen API (a genuine,
+  // edge-to-edge fullscreen on desktop). Fall back to the CSS-overlay
+  // (fixed inset-0) when requestFullscreen is unavailable or rejected (mobile /
+  // iOS), where the native API is unreliable.
   const toggleFullscreen = useCallback(() => {
-    setIsFullscreen((v) => !v);
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+      return;
+    }
+    const el = containerRef.current;
+    if (el?.requestFullscreen) {
+      el.requestFullscreen().catch(() => setCssFs((v) => !v));
+    } else {
+      setCssFs((v) => !v);
+    }
   }, []);
 
   // The bouquet layout derives ONLY from the chosen size — adding flowers
   // never makes the paper bigger. The mouth is raised a touch and the
   // geometry stays fixed for the whole build.
   const wrap = useMemo(() => {
-    const g = computeWrapGeom(size, sizeId);
+    const g = computeWrapGeom(geoSize, sizeId);
     return {
       wrapX: g.cx - g.halfW,
       wrapY: g.rimY,
@@ -106,7 +137,7 @@ export function BouquetCanvas({
       floorY: g.rimY + 16,
       ...g,
     };
-  }, [size, sizeId]);
+  }, [geoSize, sizeId]);
 
   // A very tight drag zone around the mouth shaped like an INVERTED
   // TRAPEZOID: wide where the heads splay (top), narrowing to the mouth
@@ -139,7 +170,11 @@ export function BouquetCanvas({
   useEffect(() => {
     const prev = prevSizeRef.current;
     prevSizeRef.current = size;
-    if (!prev || !items.length) return;
+    // Guards: before the FIRST real measurement (prev === null) there is no
+    // previous geometry to remap from — flowers are already where the user
+    // placed them, so we must NOT remap. Only genuine subsequent resizes
+    // (fullscreen toggle, rotate, container change) remap the arrangement.
+    if (!prev || !size || !items.length) return;
     if (prev.width === size.width && prev.height === size.height) return;
     // Remap flowers relative to the bouquet anchor (mouth center + rim) so the
     // arrangement stays glued to the paper when the canvas resizes (fullscreen
@@ -182,11 +217,11 @@ export function BouquetCanvas({
       // Clamp the fall to the mouth trapezoid so a dropped flower always lands
       // inside the bouquet (near the mouth oval), never far outside the paper.
       const clamped = clampToTrapezoid({ x: transform.x, y: transform.y }, dragLimit);
-      const dx = (clamped.x - size.width / 2) / Math.max(1, size.width / 2);
+      const dx = (clamped.x - geoSize.width / 2) / Math.max(1, geoSize.width / 2);
       const tilt = Math.max(-24, Math.min(24, dx * 22 + (Math.random() - 0.5) * 10));
       onFlowerSettled(reqId, assetId, { ...clamped, rotation: tilt });
     },
-    [size, dragLimit, onFlowerSettled]
+    [geoSize, dragLimit, onFlowerSettled]
   );
 
   const sorted = [...items].sort((a, b) => a.zIndex - b.zIndex);
@@ -254,24 +289,34 @@ export function BouquetCanvas({
     <div
       ref={containerRef}
       className={`relative overflow-hidden ${
-        isFullscreen ? 'fixed inset-0 z-[60] h-[100dvh] w-screen' : 'h-full w-full'
+        // Real browser fullscreen fills the viewport by itself (no overlay
+        // class needed). The CSS overlay only kicks in for the mobile/iOS
+        // fallback — use `h-screen` (vh) instead of `h-[100dvh]` so older
+        // browsers resolve the height and the canvas actually fills it.
+        isFullscreen ? (cssFs ? 'fixed inset-0 z-[60] h-screen w-screen' : '') : 'h-full w-full'
       }`}
       style={{ touchAction: 'pan-y', background: isFullscreen ? '#F7F3EC' : undefined }}
     >
-      <Stage ref={stageRef} width={size.width} height={size.height} onClick={handleBackground} onTap={handleBackground}>
+      <Stage
+        ref={stageRef}
+        width={size?.width || geoSize.width}
+        height={size?.height || geoSize.height}
+        onClick={handleBackground}
+        onTap={handleBackground}
+      >
         <Layer>
           {/* paper flaps + ground shadow — behind everything */}
-          <WrapBack size={size} themeId={theme} sizeId={sizeId} shapeId={shapeId} />
+          <WrapBack size={geoSize} themeId={theme} sizeId={sizeId} shapeId={shapeId} />
 
           {/* mouth oval (recess + rim) — BEHIND every flower, so the brown
               opening never covers a stem */}
-          <WrapMouth size={size} themeId={theme} sizeId={sizeId} shapeId={shapeId} />
+          <WrapMouth size={geoSize} themeId={theme} sizeId={sizeId} shapeId={shapeId} />
 
           {/* back flowers — stems sit BEHIND the sleeve paper */}
           {backFlowers.map(renderFlower)}
 
           {/* sleeve body + tail + twine — wraps AROUND the back stems */}
-          <WrapFront size={size} themeId={theme} sizeId={sizeId} shapeId={shapeId} />
+          <WrapFront size={geoSize} themeId={theme} sizeId={sizeId} shapeId={shapeId} />
 
           {/* falling flowers drop in from the viewer's side */}
           <PhysicsDrop
