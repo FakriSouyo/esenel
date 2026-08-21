@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Stage, Layer, Rect, Path, Transformer, Group, Circle } from 'react-konva';
 import { Maximize2, Minimize2, Undo2, Redo2, Trash2, Copy, FlipHorizontal2, ChevronUp, ChevronDown, Lock, Unlock } from 'lucide-react';
 import { BouquetItem } from './BouquetItem';
@@ -95,6 +96,21 @@ export function BouquetCanvas({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // The CSS-overlay fullscreen portals the canvas under <body>. After that
+  // reparent, the ResizeObserver above may not re-fire right away with the new
+  // full-viewport size, so force an immediate measure the moment the overlay
+  // mounts — otherwise the Stage stays at its old (small) size and the canvas
+  // doesn't fill the screen on mobile.
+  useEffect(() => {
+    if (!cssFs) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const w = el.clientWidth;
+    const h = el.clientHeight;
+    if (w > 4 && h > 4) setSize({ width: w, height: h });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cssFs]);
 
   // Keep `browserFs` in sync with the native Fullscreen API so the toggle
   // button and everything driven by `isFullscreen` react to the browser's own
@@ -298,16 +314,14 @@ export function BouquetCanvas({
     );
   };
 
-  return (
+  const renderCanvas = (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden ${
-        // Real browser fullscreen fills the viewport by itself (no overlay
-        // class needed). The CSS overlay only kicks in for the mobile/iOS
-        // fallback — use `h-screen` (vh) instead of `h-[100dvh]` so older
-        // browsers resolve the height and the canvas actually fills it.
-        isFullscreen ? (cssFs ? 'fixed inset-0 z-[60] h-screen w-screen' : '') : 'h-full w-full'
-      }`}
+      // When the CSS-overlay fullscreen is active the parent portal wrapper is
+      // `position: fixed`, and a plain `h-full` (height:100%) can fail to
+      // resolve against it on some browsers — so size the canvas box to the
+      // viewport explicitly. Otherwise it fills its normal (workbench) box.
+      className={`relative overflow-hidden ${cssFs ? 'h-screen w-screen' : 'h-full w-full'}`}
       style={{ touchAction: 'pan-y', background: isFullscreen ? '#F7F3EC' : undefined }}
     >
       <Stage
@@ -501,6 +515,25 @@ export function BouquetCanvas({
       )}
     </div>
   );
+
+  // Mobile/iOS CSS-overlay fullscreen must cover the REAL viewport. A plain
+  // `position: fixed` overlay can get pinned to a transformed ancestor (e.g.
+  // the framer-motion step wrapper), which moves it off-screen on actual
+  // phones. Rendering the overlay through a portal directly under <body>
+  // sidesteps every ancestor transform/containing-block quirk and reliably
+  // fills the screen on Safari and Chrome mobile alike.
+  if (isFullscreen && cssFs) {
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[60] h-screen w-screen"
+        style={{ overscrollBehavior: 'contain' }}
+      >
+        {renderCanvas}
+      </div>,
+      typeof document !== 'undefined' ? document.body : null
+    );
+  }
+  return renderCanvas;
 }
 
 function FsIconBtn({ children, onClick, disabled, title, danger }) {
