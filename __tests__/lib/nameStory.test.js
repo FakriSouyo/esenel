@@ -312,11 +312,15 @@ describe('nameStoryImage', () => {
       ],
     };
     enforceImagePrompt(story);
-    expect(story.imagePrompt).toMatch(/mixing 3 different flowers/i);
+    expect(story.imagePrompt).toMatch(/ONLY these flowers/i);
+    expect(story.imagePrompt).toMatch(/containing ONLY these flowers and no others/i);
     expect(story.imagePrompt).toContain('deep red roses');
     expect(story.imagePrompt).toContain('purple lavender sprigs');
     expect(story.imagePrompt).toContain('tulips'); // fallback terjemahan dari nama
     expect(story.imagePrompt).not.toContain('Mawar'); // jangan nama Indonesia mentah
+    // dilarang keras menambahkan bunga di luar daftar + objek/teks
+    expect(story.imagePrompt).toMatch(/no flowers other than the ones listed/i);
+    expect(story.imagePrompt).toMatch(/reference bouquet photos/i);
   });
 
   it('produces a stand-alone bouquet with no people or living beings', () => {
