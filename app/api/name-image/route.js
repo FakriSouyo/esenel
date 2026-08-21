@@ -4,11 +4,11 @@
  * Gambar buket untuk nama (urutan provider):
  *   1. Cek apakah <nameKey>.jpg/.png sudah ada di bucket name-bouquets
  *      (nama yang sama = gambar yang sama, langsung tarik tanpa generate ulang).
- *   2. Generate lewat Alibaba DashScope (qwen3.5-omni-plus) — provider image
- *      generation utama. Menggunakan OpenAI-compatible endpoint. Hasilnya di-upload ke Storage.
+ *   2. Generate lewat Bitdeer AI Inference (FLUX-2-pro) — provider image
+ *      generation utama. Hasilnya di-upload ke Storage.
  *   3. Generate lewat Cloudflare Worker Image Generation (fallback):
  *      POST { prompt } ke CLOUDFLARE_WORKER_ENDPOINT. Hasilnya di-upload ke Storage.
- *   4. Kalau Alibaba + Cloudflare kosong / gagal, fallback pollinations.ai (free):
+ *   4. Kalau Bitdeer + Cloudflare kosong / gagal, fallback pollinations.ai (free):
  *      GET https://image.pollinations.ai/prompt/{prompt}?seed=<deterministik>&model=flux
  *      dengan pengulangan anti-makhluk-hidup via Gemini vision.
  *
@@ -24,7 +24,7 @@ import { NextResponse } from 'next/server';
 import { normalizeName } from '@/lib/nameNormalize';
 import {
   buildNameImageUrl,
-  generateWithAlibaba,
+  generateWithBitdeer,
   generateWithCloudflare,
   imageHasLivingBeing,
   seedFromKey,
@@ -49,26 +49,18 @@ export async function POST(req) {
   const existing = await findNameImage(nameKey);
   if (existing) return NextResponse.json({ url: existing, cached: true });
 
-  // 2) Alibaba DashScope (kalau ALIBABA_API_KEY ada) — provider image generation.
-  // Sertakan referensi gambar dari public/image_reference untuk hasil lebih realistis.
-  // URL referensi harus lengkap (http/https) untuk API Alibaba.
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  const referenceImages = [
-    `${baseUrl}/image_reference/amsterdam.webp`,
-    `${baseUrl}/image_reference/athena.webp`,
-    `${baseUrl}/image_reference/bruges.webp`,
-  ];
-  const alibaba = await generateWithAlibaba(prompt, { referenceImages });
-  if (alibaba) {
+  // 2) Bitdeer AI Inference (kalau BITDEER_API_KEY ada) — provider image utama.
+  const bitdeer = await generateWithBitdeer(prompt);
+  if (bitdeer) {
     try {
-      const url = await uploadNameImage(nameKey, alibaba.buffer, alibaba.contentType);
-      return NextResponse.json({ url, cached: false, source: 'alibaba' });
+      const url = await uploadNameImage(nameKey, bitdeer.buffer, bitdeer.contentType);
+      return NextResponse.json({ url, cached: false, source: 'bitdeer' });
     } catch {
       // storage gagal — lanjut ke Cloudflare / fallback
     }
   }
 
-  // 3) Cloudflare Worker (kalau CLOUDFLARE_WORKER_API_KEY ada) — provider utama.
+  // 3) Cloudflare Worker (kalau CLOUDFLARE_WORKER_API_KEY ada) — provider fallback.
   const cf = await generateWithCloudflare(prompt);
   if (cf) {
     try {

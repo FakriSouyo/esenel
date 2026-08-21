@@ -4,10 +4,12 @@
  * Alur "buat bunga dari namamu":
  *   1. normalizeName(nama) -> cek cache Supabase (name_stories). Kalau sudah
  *      ada, langsung tarik tanpa generate ulang.
- *   2. Kalau belum, panggil DeepSeek (DEEPSEEK_API_KEY di .env.local).
- *   3. Kalau tidak ada key / gagal, fallback ke dummy supaya UI tetap jalan.
+ *   2. Kalau belum, panggil Bitdeer AI Inference (DeepSeek-V4-Flash) —
+ *      provider story generation utama.
+ *   3. Kalau Bitdeer tidak punya key / gagal, fallback ke Gemini (text).
+ *   4. Kalau semua gagal, fallback ke dummy supaya UI tetap jalan.
  *
- * Kunci DeepSeek TIDAK pernah sampai ke browser — hanya dipakai di sini.
+ * Kunci provider TIDAK pernah sampai ke browser — hanya dipakai di sini.
  */
 import { NextResponse } from 'next/server';
 import { normalizeName } from '@/lib/nameNormalize';
@@ -21,11 +23,133 @@ import { finalizeNameStory } from '@/lib/nameStoryFinalize';
 import { ensureUniqueBouquetName, pickBouquetName } from '@/lib/bouquetNames';
 import { getCachedNameStory, saveNameStoryCache } from '@/lib/supabase';
 import { products } from '@/data/products';
+import { BITDEER_CHAT_URL } from '@/lib/nameStoryImage';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
 const CATALOG_NAMES = Array.from(new Set(products.map((p) => p.name))).filter(Boolean);
+
+/** Normalisasi story hasil provider: pastikan field wajib + nama buket unik. */
+function normalizeStory(json, name) {
+  let story = parseStoryResponse(json);
+  if (!story) return null;
+  story.nama = story.nama || name;
+  ensureUniqueBouquetName(story, name, CATALOG_NAMES);
+  if (!story.namaBuket) {
+    story.namaBuket = pickBouquetName(name, {
+      exclude: [name, ...CATALOG_NAMES],
+    });
+  }
+  // Finalisasi: imagePrompt diperkuat + tiap bunga dapat nama puitis 1 kata.
+  finalizeNameStory(story, name, CATALOG_NAMES);
+  return story;
+}
+
+/** Simpan story ke cache (gagal tidak memblokir jawaban). */
+async function cacheStory(key, name, story) {
+  try {
+    await saveNameStoryCache(key, name, story);
+  } catch {
+    // cache gagal tidak memblokir jawaban
+  }
+}
+
+/** Build story dari satu teks hasil LLM + operasi finalisasi + cache. */
+function buildStory(raw, key, name) {
+  const story = normalizeStory(raw, name);
+  if (!story) return null;
+  cacheStory(key, name, story);
+  return story;
+}
+
+/**
+ * Panggil Bitdeer AI Inference (DeepSeek-V4-Flash) untuk membuat story.
+ * Mengembalikan objek story, atau null kalau tidak ada key / gagal.
+ */
+async function generateWithBitdeer(name) {
+  const apiKey = process.env.BITDEER_API_KEY;
+  if (!apiKey) return null;
+  const model = process.env.BITDEER_TEXT_MODEL || 'deepseek-ai/DeepSeek-V4-Flash';
+  try {
+    const res = await fetch(BITDEER_CHAT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: NAME_STORY_SYSTEM_PROMPT },
+          { role: 'user', content: buildNamePrompt(name, CATALOG_NAMES) },
+        ],
+        max_tokens: 2000,
+        top_p: 1.0,
+        temperature: 0.85,
+        frequency_penalty: 0.0,
+        presence_penalty: 0.0,
+        seed: 0,
+        stream: false,
+        response_format: { type: 'json_object' },
+      }),
+      signal: AbortSignal.timeout(90000),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error(`[name-story] Bitdeer ${res.status}: ${errText.slice(0, 200)}`);
+      return null;
+    }
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content ?? null;
+  } catch (err) {
+    const reason = String(err?.message || err).slice(0, 200);
+    console.error(`[name-story] Bitdeer gagal: ${reason}`);
+    return null;
+  }
+}
+
+/**
+ * Panggil Gemini (text) sebagai fallback story generation.
+ * Mengembalikan teks raw, atau null kalau tidak ada key / gagal.
+ */
+async function generateWithGeminiText(name) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+  let GoogleGenAI;
+  try {
+    ({ GoogleGenAI } = await import('@google/genai'));
+  } catch {
+    return null;
+  }
+  const model = process.env.GEMINI_TEXT_MODEL || 'gemini-flash-latest';
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const r = await Promise.race([
+      ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: buildNamePrompt(name, CATALOG_NAMES) }],
+          },
+        ],
+        config: {
+          systemInstruction: NAME_STORY_SYSTEM_PROMPT,
+          temperature: 0.85,
+          responseMimeType: 'application/json',
+        },
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('gemini timeout')), 90000)),
+    ]);
+    const txt = String(r?.text || '').trim();
+    return txt || null;
+  } catch (err) {
+    const reason = String(err?.message || err).replace(/AIza[\w-]+/g, '[key]').slice(0, 200);
+    console.error(`[name-story] Gemini gagal: ${reason}`);
+    return null;
+  }
+}
 
 export async function POST(req) {
   let body = {};
@@ -71,115 +195,34 @@ export async function POST(req) {
       });
     }
   } catch {
-    // tanpa env Supabase → lanjut ke DeepSeek / dummy
+    // tanpa env Supabase → lanjut ke Bitdeer / dummy
   }
 
-  // 2) DeepSeek.
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (apiKey) {
-    try {
-      const res = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: NAME_STORY_SYSTEM_PROMPT },
-            { role: 'user', content: buildNamePrompt(name, CATALOG_NAMES) },
-          ],
-          temperature: 0.85,
-          response_format: { type: 'json_object' },
-        }),
-        signal: AbortSignal.timeout(90000),
+  // 2) Bitdeer AI Inference (DeepSeek-V4-Flash) — provider story generation utama.
+  const bitdeerRaw = await generateWithBitdeer(name);
+  if (bitdeerRaw) {
+    const story = buildStory(bitdeerRaw, key, name);
+    if (story) {
+      return NextResponse.json({
+        story,
+        name,
+        cached: false,
+        source: 'bitdeer',
       });
-      if (res.ok) {
-        const data = await res.json();
-        const raw = data?.choices?.[0]?.message?.content;
-        const story = parseStoryResponse(raw);
-        if (story) {
-          story.nama = story.nama || name;
-          // Nama buket harus unik: tidak boleh nama katalog / nama input.
-          ensureUniqueBouquetName(story, name, CATALOG_NAMES);
-          if (!story.namaBuket) {
-            story.namaBuket = pickBouquetName(name, {
-              exclude: [name, ...CATALOG_NAMES],
-            });
-          }
-          // Finalisasi: imagePrompt diperkuat + tiap bunga dapat nama
-          // puitis 1 kata (jaring pengaman AI).
-          finalizeNameStory(story, name, CATALOG_NAMES);
-          try {
-            await saveNameStoryCache(key, name, story);
-          } catch {
-            // cache gagal tidak memblokir jawaban
-          }
-          return NextResponse.json({
-            story,
-            name,
-            cached: false,
-            source: 'deepseek',
-          });
-        }
-      }
-    } catch {
-      // timeout / network — jatuh ke dummy
     }
   }
 
-  // 3) Qwen fallback (Alibaba DashScope) — kalau DeepSeek gagal/tidak ada key.
-  const alibabaKey = process.env.ALIBABA_API_KEY;
-  const alibabaEndpoint = process.env.ALIBABA_ENDPOINT ||
-    'https://ws-1lzc28wlxlkdkgzm.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1';
-  if (alibabaKey) {
-    try {
-      const res = await fetch(`${alibabaEndpoint}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${alibabaKey}`,
-        },
-        body: JSON.stringify({
-          model: 'qwen-plus',
-          messages: [
-            { role: 'system', content: NAME_STORY_SYSTEM_PROMPT },
-            { role: 'user', content: buildNamePrompt(name, CATALOG_NAMES) },
-          ],
-          temperature: 0.85,
-          response_format: { type: 'json_object' },
-        }),
-        signal: AbortSignal.timeout(90000),
+  // 3) Gemini (text) — fallback kalau Bitdeer gagal / tidak ada key.
+  const geminiRaw = await generateWithGeminiText(name);
+  if (geminiRaw) {
+    const story = buildStory(geminiRaw, key, name);
+    if (story) {
+      return NextResponse.json({
+        story,
+        name,
+        cached: false,
+        source: 'gemini',
       });
-      if (res.ok) {
-        const data = await res.json();
-        const raw = data?.choices?.[0]?.message?.content;
-        const story = parseStoryResponse(raw);
-        if (story) {
-          story.nama = story.nama || name;
-          ensureUniqueBouquetName(story, name, CATALOG_NAMES);
-          if (!story.namaBuket) {
-            story.namaBuket = pickBouquetName(name, {
-              exclude: [name, ...CATALOG_NAMES],
-            });
-          }
-          finalizeNameStory(story, name, CATALOG_NAMES);
-          try {
-            await saveNameStoryCache(key, name, story);
-          } catch {
-            // cache gagal tidak memblokir jawaban
-          }
-          return NextResponse.json({
-            story,
-            name,
-            cached: false,
-            source: 'qwen',
-          });
-        }
-      }
-    } catch {
-      // timeout / network — jatuh ke dummy
     }
   }
 
