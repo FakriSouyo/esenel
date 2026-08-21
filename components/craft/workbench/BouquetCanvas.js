@@ -388,7 +388,7 @@ export function BouquetCanvas({
       {isFullscreen && (
         <>
           {/* paper themes + wrap shape + undo/redo/clear */}
-          <div className="absolute left-3 top-3 z-20 flex items-center gap-1.5 rounded-full border border-sand bg-white/90 p-1.5 shadow-[0_8px_24px_rgba(32,34,30,0.14)] backdrop-blur">
+          <div className="absolute left-3 top-3 z-20 flex flex-wrap items-center gap-1.5 rounded-2xl border border-sand bg-white/90 p-1.5 shadow-[0_8px_24px_rgba(32,34,30,0.14)] backdrop-blur max-w-[calc(100%-3.25rem)]">
             {Object.values(WRAP_THEMES).map((t) => (
               <button
                 key={t.id}
