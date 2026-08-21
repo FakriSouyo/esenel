@@ -19,8 +19,6 @@ import {
   generateWithGemini,
   GEMINI_IMAGE_MODEL_DEFAULT,
   imageHasLivingBeing,
-  ESENEL_STYLE_SUFFIX,
-  WRAPPING_STYLE,
   seedFromKey,
 } from '@/lib/nameStoryImage';
 import {
@@ -321,21 +319,23 @@ describe('nameStoryImage', () => {
     expect(story.imagePrompt).not.toContain('Mawar'); // jangan nama Indonesia mentah
   });
 
-  it('creates ESENEL-style bouquet held by person in front of shop', () => {
+  it('produces a stand-alone bouquet with no people or living beings', () => {
     const story = { imagePrompt: 'A bouquet.', bunga: [{ nama: 'Mawar Merah', namaEn: 'deep red roses' }] };
     enforceImagePrompt(story);
-    expect(story.imagePrompt).toContain(ESENEL_STYLE_SUFFIX);
-    expect(story.imagePrompt).toMatch(/held by a person/i);
-    expect(story.imagePrompt).toMatch(/flower shop/i);
-    expect(story.imagePrompt).toMatch(/ESENEL/i);
+    // buket berdiri sendiri, TANPA orang / tangan / makhluk hidup
+    expect(story.imagePrompt).toMatch(/not held by anyone|stands alone/i);
+    expect(story.imagePrompt).not.toMatch(/held by a person/i);
+    expect(story.imagePrompt).toMatch(/no people|no human hands/i);
+    expect(story.imagePrompt).not.toMatch(/flower shop/i);
   });
 
-  it('includes colorful wrapping style description', () => {
+  it('uses kraft paper wrapping and a clean studio setting', () => {
     const story = { imagePrompt: 'A bouquet.', bunga: [{ nama: 'Lavender', namaEn: 'purple lavender sprigs' }] };
     enforceImagePrompt(story);
-    expect(story.imagePrompt).toContain(WRAPPING_STYLE);
-    expect(story.imagePrompt).toMatch(/wrapping paper/i);
-    expect(story.imagePrompt).toMatch(/ribbon/i);
+    expect(story.imagePrompt).toMatch(/kraft paper/i);
+    expect(story.imagePrompt).toMatch(/wrapped/i);
+    expect(story.imagePrompt).toMatch(/studio/i);
+    expect(story.imagePrompt).not.toMatch(/satin ribbon/i); // kraft, bukan ribbon warna-warni
   });
 
   it('enforceImagePrompt is a no-op for stories without flowers', () => {

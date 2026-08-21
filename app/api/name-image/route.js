@@ -34,6 +34,20 @@ import { findNameImage, storagePublicUrl, uploadNameImage } from '@/lib/supabase
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
+/**
+ * Foto acuan buket dari folder katalog (public/image_reference) — dipakai
+ * sebagai referensi gaya buket (hand-tied, tanpa orang) untuk image model.
+ * Path relatif di-resolve ke URL absolut di generateWithBitdeer().
+ */
+const REFERENCE_BOUQUETS = [
+  '/image_reference/amsterdam.webp',
+  '/image_reference/athena.webp',
+  '/image_reference/bruges.webp',
+  '/image_reference/colmar.webp',
+  '/image_reference/como.webp',
+  '/image_reference/doha.webp',
+];
+
 export async function POST(req) {
   let body = {};
   try {
@@ -50,7 +64,8 @@ export async function POST(req) {
   if (existing) return NextResponse.json({ url: existing, cached: true });
 
   // 2) Bitdeer AI Inference (kalau BITDEER_API_KEY ada) — provider image utama.
-  const bitdeer = await generateWithBitdeer(prompt);
+  //    Sertakan foto acuan buket katalog (tanpa orang) sebagai referensi.
+  const bitdeer = await generateWithBitdeer(prompt, { referenceImages: REFERENCE_BOUQUETS });
   if (bitdeer) {
     try {
       const url = await uploadNameImage(nameKey, bitdeer.buffer, bitdeer.contentType);
