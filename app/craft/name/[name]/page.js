@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { normalizeName } from '@/lib/nameNormalize';
-import { getCachedNameStory } from '@/lib/supabase';
+import { getCachedNameStory, findNameImage } from '@/lib/supabase';
 import { getDummyStory } from '@/lib/nameStoryDummy';
 import { finalizeNameStory } from '@/lib/nameStoryFinalize';
 import { OG_VERSION } from '@/lib/site';
@@ -59,5 +59,17 @@ export default async function NameSharedPage({ params }) {
   const key = normalizeName(params.name) || '';
   if (!key) notFound();
   const story = await resolveStory(key);
-  return <NameSharePage story={story} />;
+
+  // Resolve foto buket hasil generate (kalau sudah ada di Storage) supaya
+  // halaman share langsung menampilkan buket tanpa generate ulang di client.
+  let imageUrl = null;
+  if (key) {
+    try {
+      imageUrl = await findNameImage(key);
+    } catch {
+      imageUrl = null;
+    }
+  }
+
+  return <NameSharePage story={story} nameKey={key} imageUrl={imageUrl} />;
 }
